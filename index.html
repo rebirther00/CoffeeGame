@@ -158,8 +158,10 @@ ol, ul { list-style: none; }
   padding-bottom: 6px;
   border-bottom: 5px dashed var(--danger);
 }
-.games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-bottom: 4px; }
-.game { position: relative; cursor: pointer; min-width: 0; }
+/* 다섯 게임을 3칸 + 2칸으로 놓아 두 줄을 모두 채운다 */
+.games { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding-bottom: 4px; }
+.game { position: relative; cursor: pointer; min-width: 0; grid-column: span 2; }
+.game:nth-child(n+4) { grid-column: span 3; }
 .game input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .game span {
   display: flex; flex-direction: column; gap: 1px; height: 100%;
@@ -233,7 +235,7 @@ ol, ul { list-style: none; }
 /* 게임 화면 */
 .hud { display: flex; flex-direction: column; gap: 6px; }
 .hud-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-#hud-round { font: 400 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+#hud-round, .hud-title { font: 400 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
 .chip {
@@ -245,6 +247,7 @@ ol, ul { list-style: none; }
 .chip.over b { color: var(--danger-text); font-weight: 700; }
 .chip.todo { background: transparent; color: var(--muted); border-style: dashed; border-color: var(--muted); }
 .chip.now { background: var(--primary); color: var(--primary-fg); }
+.chip.now b { color: inherit; }
 .count {
   position: absolute; left: 20px; top: 8px;
   font: 400 104px/1 var(--font-display); color: var(--ink); pointer-events: none;
@@ -322,6 +325,35 @@ ol, ul { list-style: none; }
 .dcard p { font-size: 14px; }
 .dcard .btn { margin-top: 4px; }
 
+/* 복불복 화면: 엎어 놓은 컵을 눌러 고른다 */
+.cups {
+  position: absolute; inset: 0;
+  display: grid; grid-template-columns: repeat(var(--cols, 8), minmax(0, 1fr));
+  align-content: center; justify-items: center; gap: 12px 0; padding: 12px 10px;
+}
+.cupbtn {
+  appearance: none; border: 0; background: none; padding: 0;
+  grid-column: span 2; width: var(--cupw, 64px); min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--ink); font: 700 12px/1.25 var(--font-body);
+  cursor: pointer; touch-action: manipulation;
+}
+.cupbtn svg { width: 100%; height: auto; display: block; }
+.cupbtn .by { min-height: 1.25em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cupbtn.salt .by { color: var(--kettle-dk); }
+.cupbtn:disabled { cursor: default; }
+.cupbtn.dim { opacity: .4; }
+.cupbtn.closed:not(:disabled):active svg { transform: translateY(3px); }
+.cupbtn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 10px; }
+.cupbtn.shake svg { animation: cupshake .76s ease-in-out; }
+.cupbtn.open svg { animation: pop .3s ease-out both; }
+@keyframes cupshake {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(-7deg); } 30% { transform: rotate(7deg); }
+  45% { transform: rotate(-6deg); } 60% { transform: rotate(6deg); }
+  80% { transform: rotate(-3deg) translateY(-4px); }
+}
+
 /* 결과 화면 */
 #result { overflow-y: auto; }
 .res-head { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
@@ -373,6 +405,7 @@ ol, ul { list-style: none; }
   .count.pop, .stamp { animation: none; }
   .btn, .toggle i, .toggle i::after, .game span { transition: none; }
   .pad.hit { animation: none; }
+  .cupbtn.shake svg, .cupbtn.open svg { animation: none; }
 }
 </style>
 </head>
@@ -389,6 +422,8 @@ ol, ul { list-style: none; }
       <label class="game"><input type="radio" name="game" id="game-pour" value="pour"><span><small>타이밍</small><b>커피<br>따르기</b></span></label>
       <label class="game"><input type="radio" name="game" id="game-react" value="react"><span><small>반응속도</small><b>주전자<br>끓이기</b></span></label>
       <label class="game"><input type="radio" name="game" id="game-duel" value="duel"><span><small>2인 대결</small><b>비행기<br>맞대결</b></span></label>
+      <label class="game"><input type="radio" name="game" id="game-stack" value="stack"><span><small>정확도</small><b>각설탕<br>쌓기</b></span></label>
+      <label class="game"><input type="radio" name="game" id="game-luck" value="luck"><span><small>운</small><b>소금 커피<br>복불복</b></span></label>
     </div>
     <div class="stage hero"><canvas id="hero" aria-hidden="true"></canvas></div>
     <ul class="rules" id="rules"></ul>
@@ -404,7 +439,7 @@ ol, ul { list-style: none; }
         </div>
         <div id="names" class="names"></div>
         <div class="row no-duel">
-          <span class="label" id="lb-r">판 수<small>여러 판이면 순위 점수를 합산합니다</small></span>
+          <span class="label" id="lb-r">판 수<small id="rounds-note">여러 판이면 순위 점수를 합산합니다</small></span>
           <div class="seg" role="radiogroup" aria-labelledby="lb-r">
             <label><input type="radio" name="rounds" id="rounds-1" value="1"><span>1판</span></label>
             <label><input type="radio" name="rounds" id="rounds-3" value="3"><span>3판</span></label>
@@ -477,6 +512,25 @@ ol, ul { list-style: none; }
     <div class="pad bot" id="pad-1" aria-label="아래쪽 조종판">
       <span class="pname" id="pname-1"></span><span class="lives" id="lives-1"></span>
       <span class="phint" id="phint-1"></span>
+    </div>
+  </section>
+
+  <!-- 복불복 -->
+  <section id="luck" class="screen" hidden>
+    <header class="hud">
+      <div class="hud-top">
+        <span class="hud-title" id="luck-round">한 판 승부</span>
+        <button type="button" class="link" id="luck-quit">그만하기</button>
+      </div>
+      <ol id="luck-chips" class="chips"></ol>
+    </header>
+    <div class="stage"><div class="cups" id="cups"></div></div>
+    <div class="panel">
+      <div class="pane" aria-live="polite">
+        <p class="who"><span id="luck-name"></span> <small id="luck-turn">차례</small></p>
+        <p class="hint" id="luck-hint"></p>
+        <button type="button" class="btn primary big" id="luck-next" hidden></button>
+      </div>
     </div>
   </section>
 
@@ -1336,13 +1390,183 @@ function drawDuel(ctx, W, H, d, t) {
   }
 }
 
+/* ═════════ 게임 4: 각설탕 쌓기 ═════════ */
+const STACK_W0 = 0.5;                    // 받침 너비(무대 너비를 1로 본 값)
+function mkStack() {
+  return { v0: 0.55, blocks: [{ x: 0.5, w: STACK_W0 }], mov: null, movX: 0.5, debris: [], cam: 0, flash: 0 };
+}
+function stackReset(s, v0) {
+  s.v0 = v0;
+  s.blocks = [{ x: 0.5, w: STACK_W0 }];
+  s.mov = null; s.debris.length = 0; s.flash = 0;
+}
+/* 움직이는 각설탕: 층이 올라갈수록 빨라지고, 층마다 반대쪽에서 출발한다. */
+function stackSpawn(s, now) {
+  const n = s.blocks.length;
+  s.mov = { w: s.blocks[n - 1].w, t0: now, from: n % 2 ? -1 : 1, v: Math.min(1.6, s.v0 + 0.04 * (n - 1)) };
+  s.movX = stackPos(s, now);
+}
+/* 누른 시각만으로 위치가 정해진다(프레임 속도와 무관). 좌우 끝을 일정한 속도로 오간다. */
+function stackPos(s, now) {
+  const m = s.mov, R = 0.5 - m.w / 2 + 0.04, span = 2 * R;
+  const u = Math.max(0, now - m.t0) / 1000 * m.v / span;
+  const tri = 1 - Math.abs(u % 2 - 1);
+  return 0.5 - R + span * (m.from < 0 ? tri : 1 - tri);
+}
+/* 놓기: 아래 각설탕과 겹친 부분만 남고 나머지는 잘려 떨어진다. 전혀 안 겹치면 실패. */
+function stackPlace(s, now) {
+  const m = s.mov, n = s.blocks.length, top = s.blocks[n - 1];
+  const mx = stackPos(s, now);
+  const l = Math.max(mx - m.w / 2, top.x - top.w / 2), r = Math.min(mx + m.w / 2, top.x + top.w / 2);
+  const side = mx >= top.x ? 1 : -1;
+  const piece = (x, w) => s.debris.push({ x, w, lvl: n, yo: 0, vy: 0, vx: side * 0.22, rot: 0, vr: side * 3.5 });
+  s.mov = null;
+  if (r - l <= 0.004) { piece(mx, m.w); return { miss: true }; }
+  const perfect = Math.abs(mx - top.x) <= 0.012;                  // 거의 딱 맞으면 잘리지 않는다
+  if (perfect) { s.blocks.push({ x: top.x, w: top.w }); s.flash = 1; }
+  else {
+    s.blocks.push({ x: (l + r) / 2, w: r - l });
+    if (side > 0) piece((r + mx + m.w / 2) / 2, mx + m.w / 2 - r);
+    else piece((mx - m.w / 2 + l) / 2, l - (mx - m.w / 2));
+  }
+  return { miss: false, perfect, n };
+}
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+function drawStack(ctx, W, H, s, t, dt) {
+  const c = COL;
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const tableY = Math.round(H - Math.max(20, H * 0.085));
+  const bh = clamp(W * 0.085, 18, 40);                  // 각설탕 한 층 높이(px)
+  const lw = Math.max(2.5, bh * 0.09);
+  const n = s.blocks.length;
+  // 탑이 높아지면 화면이 따라 올라간다
+  const goal = Math.max(0, (n + 1) * bh - tableY * 0.52);
+  s.cam += (goal - s.cam) * (1 - Math.exp(-dt * 8));
+  const Y = yw => tableY - yw + s.cam;                  // 탁자에서 yw(px) 위인 곳의 화면 y
+  const frac = v => v - Math.floor(v);
+
+  if (Y(0) < H) drawTable(ctx, c, W, H, Y(0), lw);
+
+  // 5층마다 높이 눈금
+  ctx.font = '700 ' + clamp(bh * 0.44, 11, 15) + 'px ' + FONT_BODY;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  for (let k = 5; k < 500; k += 5) {
+    const y = Y((k + 1) * bh);
+    if (y < -10) break;
+    if (y > H) continue;
+    ctx.save();
+    ctx.setLineDash([bh * 0.3, bh * 0.26]);
+    ctx.globalAlpha = 0.65; ctx.strokeStyle = c.kettle; ctx.lineWidth = lw * 0.9;
+    ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(W - 10, y); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = c.ink;
+    ctx.fillText(k + '층', W - 12, y - 3);
+  }
+
+  const cube = (x, w, lvl, base) => {
+    const pw = w * W, px = x * W - pw / 2, y = Y((lvl + 1) * bh);
+    rrect(ctx, px, y, pw, bh, Math.min(4, pw / 2, bh / 4));
+    ctx.fillStyle = base ? c.crema : c.cup; ctx.fill();
+    ctx.strokeStyle = c.ink; ctx.lineWidth = lw; ctx.stroke();
+    if (!base && pw > 28) {
+      ctx.fillStyle = 'rgba(42,21,9,.16)';
+      for (let j = 0; j < 3; j++) {
+        const fx = frac(Math.sin(lvl * 12.9898 + j * 78.233) * 43758.5453), fy = frac(Math.sin(lvl * 4.1 + j * 9.7) * 1234.5);
+        ctx.fillRect(px + 6 + fx * (pw - 15), y + 5 + fy * (bh - 13), 3, 3);
+      }
+    }
+  };
+  for (let i = Math.max(0, Math.floor(s.cam / bh) - 2); i < n; i++) cube(s.blocks[i].x, s.blocks[i].w, i, i === 0);
+  if (s.mov) cube(s.movX, s.mov.w, n, false);
+
+  // 딱 맞았을 때 맨 위 각설탕에 테두리가 번쩍인다
+  if (s.flash > 0.02) {
+    const b = s.blocks[n - 1], pw = b.w * W;
+    ctx.save();
+    ctx.globalAlpha = s.flash; ctx.strokeStyle = c.kettle; ctx.lineWidth = lw * 2.4;
+    rrect(ctx, b.x * W - pw / 2 - lw, Y(n * bh) - lw, pw + lw * 2, bh + lw * 2, 6); ctx.stroke();
+    ctx.restore();
+    s.flash *= Math.exp(-dt * 5);
+  }
+
+  // 잘려 떨어지는 조각
+  for (let i = s.debris.length - 1; i >= 0; i--) {
+    const d = s.debris[i];
+    d.vy += 1800 * dt; d.yo += d.vy * dt; d.x += d.vx * dt; d.rot += d.vr * dt;
+    const y = Y((d.lvl + 1) * bh) + bh / 2 + d.yo;
+    if (y > H + 80) { s.debris.splice(i, 1); continue; }
+    const pw = d.w * W;
+    ctx.save();
+    ctx.translate(d.x * W, y); ctx.rotate(d.rot);
+    rrect(ctx, -pw / 2, -bh / 2, pw, bh, Math.min(4, pw / 2, bh / 4));
+    ctx.fillStyle = c.cup; ctx.fill();
+    ctx.strokeStyle = c.ink; ctx.lineWidth = lw; ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/* ═════════ 게임 5: 소금 커피 복불복(첫 화면 시범 그림) ═════════ */
+function drawLuck(ctx, W, H, s, t) {
+  const c = COL;
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const tableY = Math.round(H - Math.max(20, H * 0.085));
+  const N = 5;
+  const cw = Math.min(W / (N + 1.6), tableY * 0.4), chh = cw * 1.08, gap = cw * 0.24;
+  const lw = Math.max(2.5, cw * 0.05);
+  const x0 = (W - (N * cw + (N - 1) * gap)) / 2 + cw / 2;
+  drawTable(ctx, c, W, H, tableY, lw);
+  const cyc = reduceMotion ? 0 : t % 7;
+  for (let i = 0; i < N; i++) {
+    const x = x0 + i * (cw + gap);
+    const local = cyc - 0.5 - i * 1.15;                 // 왼쪽부터 차례로 열고, 네 번째에서 소금이 나온다
+    const opens = i < 4 && local > 0;
+    const lift = opens ? clamp((local - 0.5) / 0.22, 0, 1) : 0;
+    const wob = opens && local < 0.5 ? Math.sin(local * 42) * 0.09 : 0;
+    if (lift > 0) {
+      if (i === 3) {                                    // 소금 더미
+        ctx.beginPath(); ctx.moveTo(x - cw * 0.3, tableY); ctx.quadraticCurveTo(x, tableY - cw * 0.62, x + cw * 0.3, tableY); ctx.closePath();
+        ctx.fillStyle = c.cup; ctx.fill(); ctx.strokeStyle = c.kettle; ctx.lineWidth = lw; ctx.stroke();
+      } else {                                          // 커피콩
+        ctx.beginPath(); ctx.ellipse(x, tableY - cw * 0.17, cw * 0.14, cw * 0.19, 0.5, 0, TAU);
+        ctx.fillStyle = c.coffee; ctx.fill(); ctx.strokeStyle = c.ink; ctx.lineWidth = lw * 0.8; ctx.stroke();
+      }
+    }
+    ctx.save();
+    ctx.translate(x, tableY - lift * chh * 0.82);
+    ctx.rotate(wob);
+    ctx.beginPath();
+    ctx.moveTo(-cw * 0.34, -chh); ctx.lineTo(cw * 0.34, -chh); ctx.lineTo(cw * 0.5, 0); ctx.lineTo(-cw * 0.5, 0);
+    ctx.closePath();
+    ctx.fillStyle = c.cup; ctx.fill();
+    ctx.strokeStyle = c.ink; ctx.lineWidth = lw; ctx.stroke();
+    rrect(ctx, -cw * 0.55, -cw * 0.12, cw * 1.1, cw * 0.13, cw * 0.06);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = c.ink;
+    ctx.font = '400 ' + Math.round(cw * 0.5) + 'px ' + FONT_DISPLAY;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, -chh * 0.5);
+    ctx.restore();
+  }
+}
+
 /* ───────── 설정 화면 ───────── */
 const KEY = 'coffeegame.cfg.v1';
 const cfg = { game: 'pour', n: 3, names: [], rounds: 1, irr: true, blind: false, sfx: true };
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (saved && typeof saved === 'object') {
-    if (['pour', 'react', 'duel'].includes(saved.game)) cfg.game = saved.game;
+    if (['pour', 'react', 'duel', 'stack', 'luck'].includes(saved.game)) cfg.game = saved.game;
     if (Number.isInteger(saved.n)) cfg.n = clamp(saved.n, 2, 8);
     if (Array.isArray(saved.names)) cfg.names = saved.names.slice(0, 8).map(x => String(x || '').slice(0, 8));
     if ([1, 3, 5].includes(saved.rounds)) cfg.rounds = saved.rounds;
@@ -1384,7 +1608,7 @@ document.querySelectorAll('input[name="rounds"]').forEach(r => r.addEventListene
 renderNames();
 
 /* ───────── 화면 전환 ───────── */
-const screens = { setup: $('setup'), play: $('play'), duel: $('duel'), result: $('result') };
+const screens = { setup: $('setup'), play: $('play'), duel: $('duel'), luck: $('luck'), result: $('result') };
 let cur = 'setup';
 function show(name) {
   for (const k2 in screens) screens[k2].hidden = k2 !== name;
@@ -1694,7 +1918,78 @@ const REACT = {
     : sec(r.rt) + '초로 가장 느렸습니다.',
   total: (P, avg) => '실격 ' + P.bad + '회 · ' + (P.cnt ? '평균 ' + sec(avg) + '초' : '기록 없음')
 };
-const MODS = { pour: POUR, react: REACT };
+/* ───────── 게임 4 진행: 각설탕 쌓기 ───────── */
+const S2 = mkStack();
+let tFall = 0, tPlaced = 0;
+function setLayers(n) {
+  const el = $('count');
+  el.hidden = false;
+  el.textContent = n + '층';
+  el.classList.add('word');
+  el.classList.remove('pop');
+}
+const STACK = {
+  title: '높이 쌓아!',
+  rules: [
+    '돌아가며 한 번씩, 좌우로 움직이는 각설탕을 버튼으로 떨어뜨려 쌓습니다.',
+    '어긋난 부분은 잘려 나가 점점 좁아지고, 완전히 빗나가면 끝납니다.',
+    '가장 높이 쌓은 사람이 1등입니다. 층수가 같으면 마지막 각설탕이 넓은 쪽이 위입니다.'
+  ],
+  tieNote: '동점이면 평균 층수가 높은 쪽이 위입니다.',
+  draw: drawStack, scene: S2, tick() {},
+  newRound: () => ({ v0: rand(0.5, 0.62) }),          // 그 판의 기본 속도. 모든 사람이 같은 조건으로 쌓는다
+  ready(first) {
+    stackReset(S2, G.round.v0);
+    return { go: '쌓기 시작', hint: first ? '버튼을 누를 때마다 각설탕이 그 자리에 놓입니다.' : NEXT_HINT };
+  },
+  go() {
+    phase = 'stack';
+    const now = performance.now();
+    stackSpawn(S2, now);
+    tPlaced = now;
+    bigBtn('놓기!', false);
+    setLayers(0);
+  },
+  update(now) {
+    if (phase === 'stack') {
+      S2.movX = stackPos(S2, now);
+      if (now - S2.mov.t0 > 10000) STACK.press(now);  // 10초 동안 안 누르면 그 자리에 놓는다
+    } else if (phase === 'fall' && now - tFall > 650) STACK.finish();
+  },
+  press(ts) {
+    if (phase !== 'stack' || ts - tPlaced < 120) return;          // 연속으로 잘못 눌린 터치는 무시
+    const r = stackPlace(S2, Math.max(ts, S2.mov.t0));
+    if (r.miss) { phase = 'fall'; tFall = performance.now(); btnBig.hidden = true; return; }
+    tPlaced = ts;
+    stackSpawn(S2, ts);
+    setLayers(r.n);
+    const f = 280 + 26 * Math.min(r.n, 30);
+    SFX.tone(f, 0.07, { type: 'triangle', vol: 0.12 });
+    if (r.perfect) SFX.tone(f * 1.5, 0.12, { at: 0.06, type: 'triangle', vol: 0.12 });
+    SFX.buzz(12);
+  },
+  finish() {
+    const n = S2.blocks.length - 1;
+    const wf = n > 0 ? S2.blocks[n].w / STACK_W0 : 0;             // 마지막 각설탕의 남은 폭(받침 대비)
+    const res = {
+      n, wf, bad: false, stat: -n, key: -(n + wf * 0.99),
+      chip: n + '층',
+      text: n + '층' + (n > 0 ? ' · 남은 폭 ' + Math.round(wf * 100) + '%' : '')
+    };
+    const ui = { delay: 250, verdict: n + '층', bad: n === 0 };
+    if (n === 0) { ui.detail = '첫 각설탕부터 빗나갔습니다.'; ui.snd = 'over'; }
+    else if (n < 5) { ui.detail = '조금 더 쌓을 수 있었습니다.'; ui.snd = 'meh'; }
+    else if (n < 10) { ui.detail = '무난합니다.'; ui.snd = 'ok'; }
+    else if (n < 16) { ui.detail = '잘 쌓았습니다.'; ui.snd = 'close'; }
+    else { ui.detail = '대단한 높이입니다.'; ui.stamp = '고층!'; ui.snd = 'perfect'; }
+    endTurn(res, ui);
+  },
+  abort() {},
+  icon: null,
+  why: r => r.n === 0 ? '하나도 쌓지 못했습니다.' : r.text + '로 가장 낮았습니다.',
+  total: (P, avg) => '평균 ' + (-avg).toFixed(1) + '층'
+};
+const MODS = { pour: POUR, react: REACT, stack: STACK };
 
 btnGo.addEventListener('click', go);
 btnNext.addEventListener('click', next);
@@ -1718,13 +2013,16 @@ function twoStepQuit(b) {
 }
 twoStepQuit($('btn-quit'));
 twoStepQuit($('dcard-quit'));
+twoStepQuit($('luck-quit'));
 function toSetup() {
   token++;
   phase = 'idle';
   dphase = 'idle';
+  lphase = 'idle';
   SFX.pourStop();
   G = null;
   DU = null;
+  LK = null;
   keys.clear();
   unwake();
   show('setup');
@@ -1733,7 +2031,7 @@ function toSetup() {
 // 진행 중에 화면이 꺼지거나 앱을 벗어나면 그 차례(대결)를 다시 한다
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (cur === 'play' && G && ['count', 'pour', 'wait', 'signal'].includes(phase)) { G.mod.abort(); toReady(); }
+    if (cur === 'play' && G && ['count', 'pour', 'wait', 'signal', 'stack', 'fall'].includes(phase)) { G.mod.abort(); toReady(); }
     if (cur === 'duel' && DU && (dphase === 'count' || dphase === 'play')) duelReady('화면이 꺼져서 이 대결을 다시 합니다.');
   } else wake();
 });
@@ -1977,6 +2275,173 @@ function duelFinal() {
   SFX.fanfare();
 }
 
+/* ───────── 게임 5 진행: 소금 커피 복불복 ─────────
+   컵 하나에만 소금 커피가 있다. 돌아가며 한 컵씩 열고, 소금 커피를 연 사람이 그 판에서 진다. */
+const LUCK_META = {
+  title: '걸리면 짜다!',
+  rules: [
+    '엎어 놓은 종이컵 가운데 하나에만 소금 커피가 들어 있습니다.',
+    '돌아가며 한 컵씩 고릅니다. 소금 커피를 고른 사람이 꼴찌입니다.',
+    '컵 수는 인원수의 배수라서 걸릴 확률은 모두 같습니다.'
+  ]
+};
+const LUCK_COLS = { 8: 4, 9: 3, 10: 5, 12: 4, 14: 5 };   // 컵 수별 한 줄 개수
+const luckCupCount = n => n * Math.ceil(8 / n);       // 8개 이상이면서 인원수의 배수
+let LK = null, lphase = 'idle';                       // pick → reveal → (pick | over)
+function luckSVG(kind) {
+  if (kind === 'closed') {
+    return '<svg viewBox="0 0 50 54" aria-hidden="true">'
+      + '<polygon points="14,6 36,6 45,46 5,46" fill="var(--cup)" stroke="var(--ink)" stroke-width="2.6" stroke-linejoin="round"/>'
+      + '<rect x="3" y="43" width="44" height="6" rx="3" fill="var(--cup)" stroke="var(--ink)" stroke-width="2.2"/>'
+      + '<text x="25" y="33" text-anchor="middle" fill="var(--ink)" style="font: 400 19px var(--font-display)">?</text></svg>';
+  }
+  const salt = kind === 'salt', id = 'lc' + (++svgSeq), cup = '7,8 43,8 37,48 13,48';
+  const line = salt ? 'var(--kettle)' : 'var(--ink)';
+  return '<svg viewBox="0 0 50 54" aria-hidden="true">'
+    + '<defs><clipPath id="' + id + '"><polygon points="' + cup + '"/></clipPath></defs>'
+    + '<polygon points="' + cup + '" fill="var(--cup-in)"/>'
+    + '<rect clip-path="url(#' + id + ')" x="0" y="18" width="50" height="40" fill="' + (salt ? 'var(--cup)' : 'var(--coffee)') + '"/>'
+    + (salt
+      ? '<g fill="var(--kettle)"><rect x="16" y="23" width="4.5" height="4.5"/><rect x="28" y="27" width="4.5" height="4.5"/><rect x="21" y="34" width="4.5" height="4.5"/><rect x="29" y="39" width="4" height="4"/></g>'
+      : '<rect clip-path="url(#' + id + ')" x="0" y="18" width="50" height="4" fill="var(--crema)"/>')
+    + '<polygon points="' + cup + '" fill="none" stroke="' + line + '" stroke-width="2.6" stroke-linejoin="round"/>'
+    + '<rect x="5" y="5" width="40" height="6" rx="3" fill="var(--cup)" stroke="' + line + '" stroke-width="2.2"/></svg>';
+}
+function startLuck(names, rounds) {
+  LK = { names: names.slice(), rounds, r: 0, off: gameSeq++, lost: names.map(() => 0), cups: [], salt: -1, order: [], turn: 0, picks: 0, lastPick: 0 };
+  show('luck');
+  wake();
+  luckRound();
+}
+function luckRound() {
+  token++;
+  const n = LK.names.length, C = luckCupCount(n);
+  LK.cups = Array.from({ length: C }, () => ({ open: false }));
+  LK.salt = Math.floor(Math.random() * C);           // 소금 커피 자리는 판을 시작할 때 정해진다
+  LK.order = Array.from({ length: n }, (_, i) => (i + LK.off + LK.r) % n);
+  LK.turn = 0; LK.picks = 0;
+  lphase = 'pick';
+  // 각 컵이 격자 두 칸을 차지한다. 마지막 줄이 덜 차면 시작 칸을 밀어 가운데에 놓는다.
+  const cols = LUCK_COLS[C] || 4, rem = C % cols;
+  $('cups').innerHTML = LK.cups.map((_, i) => '<button type="button" class="cupbtn closed" id="cup-' + i + '" data-i="' + i + '"'
+    + (rem && i === C - rem ? ' style="grid-column: ' + (cols - rem + 1) + ' / span 2"' : '')
+    + ' aria-label="' + (i + 1) + '번 컵">' + luckSVG('closed') + '<span class="by"></span></button>').join('');
+  $('luck-next').hidden = true;
+  luckTurnUI('엎어 놓은 컵을 하나 고르세요.');
+  luckLayout();
+}
+/* 컵 크기를 무대 크기에 맞춘다(줄 수가 많아도 위아래가 잘리지 않게). */
+function luckLayout() {
+  if (!LK || !LK.cups.length) return;
+  const box = $('cups'), C = LK.cups.length, cols = LUCK_COLS[C] || 4, rows = Math.ceil(C / cols);
+  const iw = box.clientWidth - 20, ih = box.clientHeight - 24;
+  if (iw <= 0 || ih <= 0) return;
+  const cupw = Math.max(30, Math.min(84, iw / cols - 6, ((ih - (rows - 1) * 12) / rows - 18) / 1.08));
+  box.style.setProperty('--cols', cols * 2);
+  box.style.setProperty('--cupw', Math.floor(cupw) + 'px');
+}
+window.addEventListener('resize', luckLayout);
+try { new ResizeObserver(luckLayout).observe($('cups')); } catch (e) {}
+function luckTurnUI(hint) {
+  $('luck-round').textContent = LK.rounds > 1 ? (LK.r + 1) + '판 / ' + LK.rounds + '판' : '한 판 승부';
+  $('luck-name').textContent = LK.names[LK.order[LK.turn]];
+  $('luck-turn').textContent = lphase === 'over' ? '당첨' : '차례';
+  $('luck-hint').textContent = hint;
+  const chips = $('luck-chips');
+  chips.innerHTML = LK.order.map((q, i) => '<li class="chip ' + (i === LK.turn ? 'now' : 'todo') + (LK.lost[q] ? ' over' : '') + '">'
+    + esc(LK.names[q]) + (LK.lost[q] ? ' <b>' + LK.lost[q] + '번 걸림</b>' : '') + '</li>').join('');
+  const now = chips.querySelector('.now');
+  if (now && now.scrollIntoView) now.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+$('cups').addEventListener('click', e => {
+  const b = e.target.closest ? e.target.closest('.cupbtn') : null;
+  if (!b || !LK || lphase !== 'pick') return;
+  const i = Number(b.dataset.i), cup = LK.cups[i];
+  if (!cup || cup.open) return;
+  token++;
+  const my = token;
+  lphase = 'reveal';
+  const p = LK.order[LK.turn];
+  LK.picks++;
+  b.classList.add('shake');
+  $('luck-hint').textContent = '두근두근…';
+  SFX.init();
+  for (let j = 0; j < 6; j++) SFX.tone(300 + j * 60, 0.05, { at: j * 0.11, type: 'square', vol: 0.05 });
+  setTimeout(() => {
+    if (my !== token) return;
+    const salt = i === LK.salt;
+    cup.open = true;
+    b.className = 'cupbtn open' + (salt ? ' salt' : '');
+    b.disabled = true;
+    b.innerHTML = luckSVG(salt ? 'salt' : 'safe') + '<span class="by">' + esc(LK.names[p]) + '</span>';
+    if (salt) { luckLose(p); return; }
+    SFX.close();
+    $('luck-hint').textContent = '달달한 커피입니다. 무사 통과!';
+    setTimeout(() => {
+      if (my !== token) return;
+      LK.turn = (LK.turn + 1) % LK.names.length;
+      lphase = 'pick';
+      luckTurnUI('폰을 넘겨받고 컵을 하나 고르세요.');
+    }, 900);
+  }, 760);
+});
+function luckLose(p) {
+  lphase = 'over';
+  LK.lost[p]++;
+  LK.lastPick = LK.picks;
+  SFX.flood();
+  document.querySelectorAll('#cups .cupbtn.closed').forEach(el => { el.disabled = true; el.classList.add('dim'); });
+  luckTurnUI(LK.picks + '번째로 연 컵이 소금 커피였습니다.');
+  const b = $('luck-next');
+  b.textContent = LK.r + 1 >= LK.rounds ? '결과 보기' : (LK.r + 2) + '판 시작';
+  b.hidden = false;
+  lockBriefly(b, 700);
+}
+$('luck-next').addEventListener('click', () => {
+  if (!LK || lphase !== 'over') return;
+  LK.r++;
+  if (LK.r >= LK.rounds) luckFinal(); else luckRound();
+});
+/* 최종 순위: 소금 커피에 적게 걸린 순. */
+function luckFinal() {
+  token++;
+  lphase = 'idle';
+  const n = LK.names.length, multi = LK.rounds > 1;
+  const arr = LK.names.map((name, i) => ({ name, lost: LK.lost[i] })).sort((a, b) => a.lost - b.lost);
+  assignRanks(arr, (a, b) => a.lost === b.lost);
+  const lastRank = Math.max(...arr.map(r => r.rank));
+  const losers = arr.filter(r => r.rank === lastRank);
+  const allTied = losers.length === n;
+  $('res-eyebrow').textContent = LUCK_META.title + ' · 최종 결과' + (multi ? ' · ' + LK.rounds + '판' : '');
+  $('res-loser').hidden = false;
+  if (allTied) {
+    $('res-title').textContent = '승부를 가리지 못했습니다';
+    $('loser-tag').textContent = '전원 동점';
+    $('loser-name').textContent = '무승부';
+    $('loser-why').textContent = '결정전으로 다시 겨루세요.';
+    $('res-sub').textContent = '';
+  } else {
+    $('res-title').textContent = multi ? '1등 ' + arr.filter(r => r.rank === 1).map(r => r.name).join(', ') : (n - 1) + '명은 무사 통과';
+    $('loser-tag').textContent = losers.length > 1 ? '공동 꼴찌' : '꼴찌';
+    $('loser-name').textContent = losers.map(r => r.name).join(', ');
+    $('loser-why').textContent = multi ? LK.rounds + '판 중 ' + losers[0].lost + '번 걸렸습니다.' : LK.lastPick + '번째로 연 컵이 소금 커피였습니다.';
+    $('res-sub').textContent = multi ? '소금 커피에 적게 걸린 순서입니다.' : '';
+  }
+  $('rank').innerHTML = arr.map(r => {
+    const cls = 'rk nocup' + (r.rank === 1 ? ' first' : '') + (r.rank === lastRank && !allTied ? ' last' : '');
+    const detail = multi ? '소금 커피 ' + r.lost + '번' : r.lost ? '소금 커피 당첨' : '무사 통과';
+    return '<li class="' + cls + '"><span class="pos">' + r.rank + '</span>'
+      + '<span class="who2"><span class="nm">' + esc(r.name) + '</span><span class="sub' + (!multi && r.lost ? ' bad' : '') + '">' + detail + '</span></span>'
+      + '<span class="val"><b>' + r.rank + '등</b></span></li>';
+  }).join('');
+  const names = LK.names.slice(), rounds = LK.rounds, tieNames = losers.map(r => r.name);
+  setActions('같은 멤버로 한 판 더', () => startLuck(names, rounds),
+    losers.length > 1 ? '꼴찌 결정전 (' + tieNames.length + '명, 1판)' : null,
+    () => startLuck(tieNames, 1), true);
+  show('result');
+  SFX.fanfare();
+}
+
 /* ───────── 결과 ───────── */
 let svgSeq = 0;
 function miniCup(h, target) {
@@ -2100,11 +2565,12 @@ $('form').addEventListener('submit', e => {
   SFX.init();
   const names = Array.from({ length: cfg.n }, (_, i) => (cfg.names[i] || '').trim() || (i + 1) + '번');
   if (cfg.game === 'duel') startDuel(names);
+  else if (cfg.game === 'luck') startLuck(names, cfg.rounds);
   else newGame(cfg.game, names, cfg.rounds, { irr: cfg.irr, blind: cfg.blind });
 });
 
 /* ───────── 게임 선택과 시범 장면 ───────── */
-const META = { pour: POUR, react: REACT, duel: DUEL_META };
+const META = { pour: POUR, react: REACT, duel: DUEL_META, stack: STACK, luck: LUCK_META };
 function applyGame() {
   const mod = META[cfg.game];
   $('game-' + cfg.game).checked = true;
@@ -2112,6 +2578,7 @@ function applyGame() {
   $('rules').innerHTML = mod.rules.map(x => '<li>' + esc(x) + '</li>').join('');
   document.querySelectorAll('.only-pour').forEach(el => { el.hidden = cfg.game !== 'pour'; });
   document.querySelectorAll('.no-duel').forEach(el => { el.hidden = cfg.game === 'duel'; });
+  $('rounds-note').textContent = cfg.game === 'luck' ? '여러 판이면 걸린 횟수로 순위를 정합니다' : '여러 판이면 순위 점수를 합산합니다';
 }
 document.querySelectorAll('input[name="game"]').forEach(r => r.addEventListener('change', () => {
   if (!r.checked) return;
@@ -2159,6 +2626,26 @@ function demoDuel(dt, t, W, H) {
   DD.planes[1].tx = 0.5 + 0.34 * Math.sin(t * 0.9 + 2.2) + 0.07 * Math.sin(t * 3.3);
   duelStep(DD, dt, W, H);
 }
+// 쌓기 시범: 조금씩 어긋나게 알아서 쌓다가 9층이 되거나 빗나가면 처음부터 다시 한다
+const SD = mkStack();
+let sdErr = 0, sdHold = 0;
+if (reduceMotion) SD.blocks.push({ x: 0.53, w: 0.44 }, { x: 0.5, w: 0.38 }, { x: 0.52, w: 0.34 });
+function demoStack(dt) {
+  if (reduceMotion) return;
+  const now = performance.now();
+  if (sdHold > 0) {
+    sdHold -= dt;
+    if (sdHold <= 0) stackReset(SD, 0.55);
+    return;
+  }
+  if (!SD.mov) { stackSpawn(SD, now); sdErr = rand(-0.06, 0.06) * (SD.blocks.length > 6 ? 2.4 : 1); }
+  SD.movX = stackPos(SD, now);
+  const top = SD.blocks[SD.blocks.length - 1];
+  if (now - SD.mov.t0 > 300 && Math.abs(SD.movX - (top.x + sdErr)) < 0.02) {
+    const r = stackPlace(SD, now);
+    if (r.miss || r.n >= 9) sdHold = 1.4;
+  }
+}
 
 /* ───────── 루프 ───────── */
 readTokens();
@@ -2178,7 +2665,9 @@ function frame(ts) {
   if (cur === 'setup') {
     if (cfg.game === 'pour') { demoPour(dt); tickScene(D, dt); paint(heroCv, drawPour, D, t, dt); }
     else if (cfg.game === 'react') { demoBoil(dt); tickBoil(BD, dt); paint(heroCv, drawBoil, BD, t, dt); }
-    else { demoDuel(dt, t, heroCv.clientWidth, heroCv.clientHeight); paint(heroCv, drawDuel, DD, t, dt); }
+    else if (cfg.game === 'duel') { demoDuel(dt, t, heroCv.clientWidth, heroCv.clientHeight); paint(heroCv, drawDuel, DD, t, dt); }
+    else if (cfg.game === 'stack') { demoStack(dt); paint(heroCv, drawStack, SD, t, dt); }
+    else paint(heroCv, drawLuck, null, t, dt);
   } else if (cur === 'duel') {
     duelUpdate(dt);
     paint(dcv, drawDuel, DS, t, dt);
