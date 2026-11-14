@@ -38,6 +38,8 @@
   --dash: #FFD02E;
   --stove: #4B352A;
   --flame: #FF7A1A;
+  --p1: #D7301B;
+  --p2: #1E63B8;
   --font-display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
@@ -156,17 +158,17 @@ ol, ul { list-style: none; }
   padding-bottom: 6px;
   border-bottom: 5px dashed var(--danger);
 }
-.games { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-bottom: 4px; }
+.games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-bottom: 4px; }
 .game { position: relative; cursor: pointer; min-width: 0; }
 .game input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .game span {
   display: flex; flex-direction: column; gap: 1px; height: 100%;
-  border: 2.5px solid var(--line); border-radius: 16px; padding: 8px 12px 9px;
+  border: 2.5px solid var(--line); border-radius: 16px; padding: 8px 10px 9px;
   background: var(--surface); color: var(--surface-fg); box-shadow: 0 4px 0 var(--shadow);
   transition: transform .06s, box-shadow .06s;
 }
-.game small { font-size: 12.5px; font-weight: 700; opacity: .75; }
-.game b { font: 400 20px/1.15 var(--font-display); }
+.game small { font-size: 12.5px; font-weight: 700; opacity: .75; white-space: nowrap; }
+.game b { font: 400 19px/1.15 var(--font-display); }
 .game input:checked + span { background: var(--primary); color: var(--primary-fg); transform: translateY(2px); box-shadow: 0 2px 0 var(--shadow); }
 .game input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 3px; }
 .stage.hero { flex: 0 0 auto; height: 190px; height: clamp(160px, 27vh, 230px); }
@@ -278,6 +280,48 @@ ol, ul { list-style: none; }
 .verdict.bad { color: var(--danger-text); }
 .detail { font-size: 14.5px; font-variant-numeric: tabular-nums; }
 
+/* 맞대결 화면: 위아래 조종판 사이에 경기장. 위쪽 조종판은 마주 앉은 사람이 읽도록 뒤집는다. */
+#duel { gap: 10px; }
+.pad {
+  flex: 0 0 auto; height: 92px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; gap: 4px 10px;
+  padding: 8px 16px;
+  border: 2.5px solid var(--line); border-radius: 20px;
+  background: var(--surface);
+  background: color-mix(in srgb, var(--pc) 18%, var(--surface));
+  color: var(--surface-fg);
+  box-shadow: 0 4px 0 var(--shadow);
+  touch-action: none; cursor: grab;
+}
+.pad.top { --pc: var(--p1); transform: rotate(180deg); box-shadow: 0 -4px 0 var(--shadow); }
+.pad.bot { --pc: var(--p2); }
+.pad.ready { background: color-mix(in srgb, var(--pc) 42%, var(--surface)); }
+.pad.hit { animation: padhit .35s ease-out; }
+@keyframes padhit { from { background: var(--pc); } }
+.pname { font: 400 24px/1.15 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lives { display: flex; gap: 6px; align-items: center; }
+.life { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--line); background: var(--pc); }
+.life.off { background: transparent; opacity: .4; }
+.phint { grid-column: 1 / -1; font-size: 13.5px; opacity: .8; }
+.pad.done .phint { font: 400 21px/1.1 var(--font-display); opacity: 1; }
+.dmsg {
+  position: absolute; left: 0; right: 0; text-align: center;
+  font: 400 60px/1 var(--font-display); color: var(--ink); text-shadow: 0 3px 0 var(--cup); pointer-events: none;
+}
+.dmsg.top { top: 17%; transform: rotate(180deg); }
+.dmsg.bot { bottom: 17%; }
+.dcard {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(88%, 300px);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  padding: 14px 14px 8px;
+  background: var(--surface); color: var(--surface-fg);
+  border: 2.5px solid var(--line); border-radius: 18px; box-shadow: 0 5px 0 var(--shadow);
+}
+.dcard h3 { margin: 0; font: 400 26px/1.15 var(--font-display); overflow-wrap: anywhere; }
+.dcard p { font-size: 14px; }
+.dcard .btn { margin-top: 4px; }
+
 /* 결과 화면 */
 #result { overflow-y: auto; }
 .res-head { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
@@ -322,10 +366,13 @@ ol, ul { list-style: none; }
   .btn.stop { font-size: 50px; }
   .who { font-size: 28px; }
   .brand h1 { font-size: 38px; }
+  .pad { height: 80px; }
+  .dmsg { font-size: 48px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .count.pop, .stamp { animation: none; }
   .btn, .toggle i, .toggle i::after, .game span { transition: none; }
+  .pad.hit { animation: none; }
 }
 </style>
 </head>
@@ -335,12 +382,13 @@ ol, ul { list-style: none; }
   <!-- 설정 -->
   <section id="setup" class="screen">
     <header class="brand">
-      <p class="eyebrow">폰 하나로 돌려 가며 하는 커피 내기</p>
+      <p class="eyebrow">폰 하나로 하는 커피 내기</p>
       <h1 id="game-title">선 넘지 마!</h1>
     </header>
     <div class="games" role="radiogroup" aria-label="게임 선택">
-      <label class="game"><input type="radio" name="game" id="game-pour" value="pour"><span><small>타이밍 게임</small><b>커피 따르기</b></span></label>
-      <label class="game"><input type="radio" name="game" id="game-react" value="react"><span><small>반응속도 게임</small><b>주전자 끓이기</b></span></label>
+      <label class="game"><input type="radio" name="game" id="game-pour" value="pour"><span><small>타이밍</small><b>커피<br>따르기</b></span></label>
+      <label class="game"><input type="radio" name="game" id="game-react" value="react"><span><small>반응속도</small><b>주전자<br>끓이기</b></span></label>
+      <label class="game"><input type="radio" name="game" id="game-duel" value="duel"><span><small>2인 대결</small><b>비행기<br>맞대결</b></span></label>
     </div>
     <div class="stage hero"><canvas id="hero" aria-hidden="true"></canvas></div>
     <ul class="rules" id="rules"></ul>
@@ -355,7 +403,7 @@ ol, ul { list-style: none; }
           </div>
         </div>
         <div id="names" class="names"></div>
-        <div class="row">
+        <div class="row no-duel">
           <span class="label" id="lb-r">판 수<small>여러 판이면 순위 점수를 합산합니다</small></span>
           <div class="seg" role="radiogroup" aria-labelledby="lb-r">
             <label><input type="radio" name="rounds" id="rounds-1" value="1"><span>1판</span></label>
@@ -406,6 +454,29 @@ ol, ul { list-style: none; }
         <p class="detail" id="detail"></p>
         <button type="button" class="btn primary big" id="btn-next">다음</button>
       </div>
+    </div>
+  </section>
+
+  <!-- 맞대결 -->
+  <section id="duel" class="screen" hidden>
+    <div class="pad top" id="pad-0" aria-label="위쪽 조종판">
+      <span class="pname" id="pname-0"></span><span class="lives" id="lives-0"></span>
+      <span class="phint" id="phint-0"></span>
+    </div>
+    <div class="stage" id="field">
+      <canvas id="dcv" aria-hidden="true"></canvas>
+      <div class="dmsg top" id="dmsg-0" hidden></div>
+      <div class="dmsg bot" id="dmsg-1" hidden></div>
+      <div class="dcard" id="dcard" aria-live="polite">
+        <h3 id="dcard-title"></h3>
+        <p id="dcard-sub"></p>
+        <button type="button" class="btn primary big" id="dcard-btn" hidden></button>
+        <button type="button" class="link" id="dcard-quit">그만하기</button>
+      </div>
+    </div>
+    <div class="pad bot" id="pad-1" aria-label="아래쪽 조종판">
+      <span class="pname" id="pname-1"></span><span class="lives" id="lives-1"></span>
+      <span class="phint" id="phint-1"></span>
     </div>
   </section>
 
@@ -552,6 +623,13 @@ const SFX = {
     this.tone(3075, 0.55, { to: 3750, vol: 0.05 });
     this.buzz(45);
   },
+  shot() {
+    const ac = this.ac;
+    if (!ac || !this.on || ac.currentTime - (this.lastShot || 0) < 0.12) return;
+    this.lastShot = ac.currentTime;
+    this.tone(900, 0.05, { type: 'square', vol: 0.025, to: 500 });
+  },
+  boom() { this.tone(170, 0.4, { type: 'sawtooth', vol: 0.2, to: 45 }); this.buzz(90); },
   buzz(pattern) {
     if (!this.on) return;
     try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
@@ -568,7 +646,7 @@ const SFX = {
 
 /* ───────── 그림 공통 ───────── */
 const COL = {};
-let FONT_BODY = 'sans-serif';
+let FONT_BODY = 'sans-serif', FONT_DISPLAY = 'sans-serif';
 function readTokens() {
   const cs = getComputedStyle(document.documentElement);
   const g = n => cs.getPropertyValue(n).trim();
@@ -577,7 +655,9 @@ function readTokens() {
   COL.kettle = g('--kettle'); COL.kettleDk = g('--kettle-dk');
   COL.sleeve = g('--sleeve'); COL.dash = g('--dash'); COL.table = g('--table');
   COL.stove = g('--stove'); COL.flame = g('--flame');
+  COL.p = [g('--p1'), g('--p2')];
   FONT_BODY = getComputedStyle(document.body).fontFamily || 'sans-serif';
+  FONT_DISPLAY = g('--font-display') || FONT_BODY;
 }
 function drawTable(ctx, c, W, H, tableY, lw) {
   ctx.fillStyle = c.table;
@@ -1071,13 +1151,198 @@ function drawBoil(ctx, W, H, b, t, dt) {
   }
 }
 
+/* ═════════ 게임 3: 비행기 맞대결(2명 동시) ═════════ */
+const DUEL_LIVES = 3;
+const DUEL_LIMIT = 60;                   // 이 시간(초)까지 승부가 안 나면 남은 목숨으로 가린다
+const DUEL_INV = 1.1;                    // 맞은 뒤 잠깐 맞지 않는 시간(초)
+/* 시간이 갈수록 미사일이 촘촘하고 빨라지며, 나중에는 여러 갈래로 나간다. 두 사람 조건은 항상 같다. */
+function duelLevel(t) {
+  return {
+    interval: Math.max(0.15, 0.46 - 0.011 * t),
+    speed: Math.min(1.6, 0.8 + 0.022 * t),          // 경기장 높이를 1로 본 초당 속도
+    ways: t < 12 ? 1 : t < 28 ? 3 : 5
+  };
+}
+function mkDuel(demo) {
+  return {
+    demo: !!demo, t: 0, fireAt: 0.5, ways: 1, banner: null,
+    planes: [0, 1].map(() => ({ x: 0.5, tx: 0.5, vx: 0, lives: DUEL_LIVES, inv: 0, hits: 0, kb: false })),
+    shots: [], fx: []
+  };
+}
+/* 위치는 경기장 너비·높이를 1로 본 값으로 둔다. 0번이 위쪽, 1번이 아래쪽 비행기. */
+function duelGeom(W, H) {
+  const ps = clamp(Math.min(W * 0.14, H * 0.16), 24, 58);    // 비행기 길이(px)
+  const edge = (ps * 0.62 + 10) / H;
+  return { ps, r: ps * 0.34, y: [edge, 1 - edge], m: ps * 0.5 / W };
+}
+function duelMove(d, dt, g) {
+  d.planes.forEach(p => {
+    const lim = 1.6 * dt;                            // 너비를 0.6초쯤에 가로지르는 최고 속도
+    const dx = clamp(clamp(p.tx, g.m, 1 - g.m) - p.x, -lim, lim);
+    p.x += dx;
+    p.vx += (dx / Math.max(dt, 1e-4) - p.vx) * Math.min(1, dt * 14);
+  });
+}
+function duelStep(d, dt, W, H) {
+  const g = duelGeom(W, H);
+  d.t += dt;
+  duelMove(d, dt, g);
+  d.planes.forEach(p => { p.inv = Math.max(0, p.inv - dt); });
+  const lv = duelLevel(d.demo ? d.t % 26 : d.t);
+  if (lv.ways !== d.ways) {
+    if (!d.demo && lv.ways > d.ways) d.banner = { text: '미사일 ' + lv.ways + '갈래!', at: d.t };
+    d.ways = lv.ways;
+  }
+  const ev = { fired: false, hit: [] };
+  if (d.t >= d.fireAt) {
+    d.fireAt = d.t + lv.interval;
+    ev.fired = true;
+    d.planes.forEach((p, o) => {
+      if (p.lives <= 0) return;
+      const dir = o === 0 ? 1 : -1;                  // 위쪽 비행기는 아래로 쏜다
+      for (let i = 0; i < lv.ways; i++) {
+        const a = (i - (lv.ways - 1) / 2) * 0.16;    // 갈래 사이 각도 약 9도
+        d.shots.push({ o, x: p.x, y: g.y[o] + dir * g.ps * 0.5 / H, vx: Math.tan(a) * lv.speed * H / W, vy: dir * lv.speed });
+      }
+    });
+  }
+  const rr = (g.r + g.ps * 0.09) * (g.r + g.ps * 0.09);
+  for (let i = d.shots.length - 1; i >= 0; i--) {
+    const s = d.shots[i];
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    if (s.y < -0.06 || s.y > 1.06 || s.x < -0.06 || s.x > 1.06) { d.shots.splice(i, 1); continue; }
+    if (d.demo) continue;
+    const q = 1 - s.o, tp = d.planes[q];
+    if (tp.inv > 0 || tp.lives <= 0) continue;
+    const dx = (s.x - tp.x) * W, dy = (s.y - g.y[q]) * H;
+    if (dx * dx + dy * dy < rr) {
+      d.shots.splice(i, 1);
+      tp.lives--; tp.inv = DUEL_INV;
+      d.planes[s.o].hits++;
+      d.fx.push({ x: tp.x, y: g.y[q], at: d.t });
+      ev.hit.push(q);
+    }
+  }
+  return ev;
+}
+/* 비행기. 중심이 원점, 기수가 위(-y), 길이의 절반이 1인 좌표에서 그린다. */
+function drawPlane(ctx, c, color, lwU, t) {
+  ctx.strokeStyle = c.ink; ctx.lineWidth = lwU;
+  // 분사 불꽃
+  ctx.beginPath(); ctx.moveTo(-0.11, 0.93); ctx.lineTo(0, 1.22 + 0.1 * Math.sin(t * 40)); ctx.lineTo(0.11, 0.93); ctx.closePath();
+  ctx.fillStyle = c.flame; ctx.fill();
+  // 날개
+  ctx.beginPath();
+  ctx.moveTo(0, -0.3); ctx.lineTo(1, 0.3); ctx.lineTo(1, 0.5); ctx.lineTo(0.16, 0.34);
+  ctx.lineTo(-0.16, 0.34); ctx.lineTo(-1, 0.5); ctx.lineTo(-1, 0.3); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill(); ctx.stroke();
+  // 꼬리 날개
+  ctx.beginPath();
+  ctx.moveTo(0, 0.5); ctx.lineTo(0.45, 0.86); ctx.lineTo(0.45, 0.98); ctx.lineTo(-0.45, 0.98); ctx.lineTo(-0.45, 0.86); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // 동체
+  ctx.beginPath();
+  ctx.moveTo(0, -1);
+  ctx.bezierCurveTo(0.24, -0.8, 0.22, -0.3, 0.19, 0.3);
+  ctx.lineTo(0.11, 0.95); ctx.lineTo(-0.11, 0.95); ctx.lineTo(-0.19, 0.3);
+  ctx.bezierCurveTo(-0.22, -0.3, -0.24, -0.8, 0, -1);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // 조종석
+  ctx.beginPath(); ctx.ellipse(0, -0.42, 0.09, 0.19, 0, 0, TAU);
+  ctx.fillStyle = c.cup; ctx.fill(); ctx.lineWidth = lwU * 0.7; ctx.stroke();
+}
+function drawDuel(ctx, W, H, d, t) {
+  const c = COL, g = duelGeom(W, H), ps = g.ps;
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const lw = Math.max(2, ps * 0.05);
+
+  // 구름
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  for (let i = 0; i < 4; i++) {
+    const s = ps * (0.5 + (i % 2) * 0.25);
+    const x = ((i * 0.37 + t * (0.012 + i * 0.004)) % 1.4 - 0.2) * W, y = H * (0.2 + i * 0.2);
+    [[0, 0, 1], [0.9, 0.15, 0.75], [-0.9, 0.2, 0.65]].forEach(([ox, oy, k]) => {
+      ctx.beginPath(); ctx.arc(x + ox * s, y + oy * s, s * k, 0, TAU); ctx.fill();
+    });
+  }
+  // 가운데 선
+  ctx.save();
+  ctx.setLineDash([ps * 0.3, ps * 0.26]);
+  ctx.globalAlpha = 0.7; ctx.strokeStyle = c.kettle; ctx.lineWidth = lw * 1.2;
+  ctx.beginPath(); ctx.moveTo(10, H / 2); ctx.lineTo(W - 10, H / 2); ctx.stroke();
+  ctx.restore();
+
+  // 미사일
+  d.shots.forEach(s => {
+    const vx = s.vx * W, vy = s.vy * H, n = Math.hypot(vx, vy) || 1;
+    const ux = vx / n * ps * 0.19, uy = vy / n * ps * 0.19;
+    const x = s.x * W, y = s.y * H;
+    ctx.beginPath(); ctx.moveTo(x - ux, y - uy); ctx.lineTo(x + ux, y + uy);
+    ctx.strokeStyle = c.ink; ctx.lineWidth = ps * 0.19; ctx.stroke();
+    ctx.strokeStyle = c.p[s.o]; ctx.lineWidth = ps * 0.1; ctx.stroke();
+  });
+
+  // 비행기. 맞은 직후에는 깜빡인다.
+  d.planes.forEach((p, o) => {
+    if (p.lives <= 0) return;
+    if (p.inv > 0 && Math.floor(p.inv * 12) % 2 === 0) return;
+    ctx.save();
+    ctx.translate(p.x * W, g.y[o] * H);
+    ctx.rotate((o === 0 ? Math.PI : 0) + clamp(p.vx * 0.1, -0.22, 0.22) * (o === 0 ? -1 : 1));
+    ctx.scale(ps / 2, ps / 2);
+    drawPlane(ctx, c, c.p[o], lw / (ps / 2), t);
+    ctx.restore();
+  });
+
+  // 맞았을 때의 별 모양 폭발
+  for (let i = d.fx.length - 1; i >= 0; i--) {
+    const f = d.fx[i], age = (d.t - f.at) / 0.45;
+    if (age >= 1) { d.fx.splice(i, 1); continue; }
+    const R = ps * (0.55 + 0.9 * age);
+    ctx.save();
+    ctx.translate(f.x * W, f.y * H); ctx.rotate(age * 0.6);
+    ctx.globalAlpha = 1 - age * age;
+    ctx.beginPath();
+    for (let j = 0; j < 20; j++) {
+      const rad = j % 2 ? R * 0.55 : R, a = j * TAU / 20;
+      if (j === 0) ctx.moveTo(Math.cos(a) * rad, Math.sin(a) * rad); else ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+    }
+    ctx.closePath();
+    ctx.fillStyle = c.dash; ctx.fill();
+    ctx.strokeStyle = c.ink; ctx.lineWidth = lw; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.3, 0, TAU); ctx.fillStyle = c.cup; ctx.fill();
+    ctx.restore();
+  }
+
+  // 단계가 올라갈 때 양쪽에서 읽을 수 있게 두 번 쓴다
+  if (d.banner) {
+    const age = (d.t - d.banner.at) / 1.3;
+    if (age >= 1) d.banner = null;
+    else {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (1 - age) * 3);
+      ctx.fillStyle = c.ink;
+      ctx.font = '400 ' + Math.round(ps * 0.62) + 'px ' + FONT_DISPLAY;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(d.banner.text, W / 2, H / 2 + ps * 0.75);
+      ctx.translate(W / 2, H / 2 - ps * 0.75); ctx.rotate(Math.PI);
+      ctx.fillText(d.banner.text, 0, 0);
+      ctx.restore();
+    }
+  }
+}
+
 /* ───────── 설정 화면 ───────── */
 const KEY = 'coffeegame.cfg.v1';
 const cfg = { game: 'pour', n: 3, names: [], rounds: 1, irr: true, blind: false, sfx: true };
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (saved && typeof saved === 'object') {
-    if (saved.game === 'pour' || saved.game === 'react') cfg.game = saved.game;
+    if (['pour', 'react', 'duel'].includes(saved.game)) cfg.game = saved.game;
     if (Number.isInteger(saved.n)) cfg.n = clamp(saved.n, 2, 8);
     if (Array.isArray(saved.names)) cfg.names = saved.names.slice(0, 8).map(x => String(x || '').slice(0, 8));
     if ([1, 3, 5].includes(saved.rounds)) cfg.rounds = saved.rounds;
@@ -1119,7 +1384,7 @@ document.querySelectorAll('input[name="rounds"]').forEach(r => r.addEventListene
 renderNames();
 
 /* ───────── 화면 전환 ───────── */
-const screens = { setup: $('setup'), play: $('play'), result: $('result') };
+const screens = { setup: $('setup'), play: $('play'), duel: $('duel'), result: $('result') };
 let cur = 'setup';
 function show(name) {
   for (const k2 in screens) screens[k2].hidden = k2 !== name;
@@ -1442,29 +1707,275 @@ document.addEventListener('keydown', e => {
 $('play').addEventListener('contextmenu', e => e.preventDefault());
 
 // 그만하기: 한 번 더 눌러야 종료
-let quitArmed = 0;
-$('btn-quit').addEventListener('click', () => {
-  const b = $('btn-quit');
-  if (Date.now() - quitArmed < 3000) { quitArmed = 0; b.textContent = '그만하기'; toSetup(); return; }
-  quitArmed = Date.now();
-  b.textContent = '한 번 더 누르면 종료';
-  setTimeout(() => { if (quitArmed && Date.now() - quitArmed >= 2900) { quitArmed = 0; b.textContent = '그만하기'; } }, 3000);
-});
+function twoStepQuit(b) {
+  let armed = 0;
+  b.addEventListener('click', () => {
+    if (Date.now() - armed < 3000) { armed = 0; b.textContent = '그만하기'; toSetup(); return; }
+    armed = Date.now();
+    b.textContent = '한 번 더 누르면 종료';
+    setTimeout(() => { if (armed && Date.now() - armed >= 2900) { armed = 0; b.textContent = '그만하기'; } }, 3000);
+  });
+}
+twoStepQuit($('btn-quit'));
+twoStepQuit($('dcard-quit'));
 function toSetup() {
   token++;
   phase = 'idle';
+  dphase = 'idle';
   SFX.pourStop();
   G = null;
+  DU = null;
+  keys.clear();
   unwake();
   show('setup');
 }
 
-// 진행 중에 화면이 꺼지거나 앱을 벗어나면 그 차례를 다시 한다
+// 진행 중에 화면이 꺼지거나 앱을 벗어나면 그 차례(대결)를 다시 한다
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     if (cur === 'play' && G && ['count', 'pour', 'wait', 'signal'].includes(phase)) { G.mod.abort(); toReady(); }
+    if (cur === 'duel' && DU && (dphase === 'count' || dphase === 'play')) duelReady('화면이 꺼져서 이 대결을 다시 합니다.');
   } else wake();
 });
+
+/* ───────── 게임 3 진행: 비행기 맞대결 ─────────
+   둘이면 한 번 붙고 끝난다. 셋 이상이면 이긴 사람이 자리에 남아 다음 사람과 붙는 연승전이다. */
+const DUEL_META = {
+  title: '쏘고 피해!',
+  rules: [
+    '둘이 폰을 마주 잡고, 각자 자기 쪽 조종판을 좌우로 밀어 비행기를 움직입니다.',
+    '미사일은 자동으로 나가고 점점 빨라집니다. 세 번 맞으면 집니다.',
+    '3명 이상이면 이긴 사람이 남아 다음 사람과 붙는 연승전입니다.'
+  ]
+};
+const dcv = $('dcv');
+const pads = [$('pad-0'), $('pad-1')];
+const keys = new Set();
+const duelTally = { key: '', wins: {} };
+let DS = mkDuel(false);                  // 지금 대결의 경기장 상태
+let DU = null;                           // 연승전 전체 상태
+let dphase = 'idle';                     // ready → count → play → over
+let dReady = [false, false], tCountD = 0, dLast = 0, dAct = null;
+
+function startDuel(names) {
+  const n = names.length;
+  const off = n > 2 ? gameSeq++ % n : 0;             // 둘이면 자리를 바꾸지 않는다
+  const order = names.map((_, i) => names[(i + off) % n]);
+  DU = { names: order, stats: order.map(() => ({ wins: 0, hits: 0, lost: 0 })), cur: [0, 1], next: 2, match: 1, champ: -1 };
+  show('duel');
+  wake();
+  duelReady('');
+}
+function renderLives() {
+  [0, 1].forEach(i => {
+    $('lives-' + i).innerHTML = Array.from({ length: DUEL_LIVES }, (_, k2) => '<i class="life' + (k2 < DS.planes[i].lives ? '' : ' off') + '"></i>').join('');
+  });
+}
+function duelMsg(top, bot) {
+  [top, bot].forEach((txt, i) => {
+    const el = $('dmsg-' + i);
+    el.hidden = !txt;
+    if (txt) el.textContent = txt;
+  });
+}
+function duelCard(title, sub, label, fn) {
+  $('dcard-title').textContent = title;
+  $('dcard-sub').textContent = sub;
+  const b = $('dcard-btn');
+  b.hidden = !label;
+  if (label) { b.textContent = label; dAct = fn; lockBriefly(b, 600); }
+  $('dcard').hidden = false;
+}
+function duelReady(note) {
+  token++;
+  dphase = 'ready';
+  DS = mkDuel(false);
+  dReady = [false, false];
+  [0, 1].forEach(i => {
+    $('pname-' + i).textContent = DU.names[DU.cur[i]];
+    $('phint-' + i).textContent = '여기에 손가락을 올리면 준비 완료';
+    pads[i].classList.remove('ready', 'done');
+  });
+  duelMsg(null, null);
+  renderLives();
+  const n = DU.names.length;
+  duelCard(n > 2 ? '대결 ' + DU.match + ' / ' + (n - 1) : DU.names[DU.cur[0]] + ' 대 ' + DU.names[DU.cur[1]],
+    (note ? note + ' ' : '') + '둘 다 조종판에 손가락을 올리면 시작합니다.', null, null);
+}
+function duelSetReady(i) {
+  if (dphase !== 'ready' || dReady[i]) return;
+  dReady[i] = true;
+  pads[i].classList.add('ready');
+  $('phint-' + i).textContent = '준비 완료';
+  SFX.init();
+  SFX.click();
+  if (dReady[0] && dReady[1]) {
+    token++;
+    dphase = 'count';
+    tCountD = performance.now();
+    dLast = 0;
+    $('dcard').hidden = true;
+    [0, 1].forEach(k2 => { $('phint-' + k2).textContent = '좌우로 밀어 조종'; });
+    [0, 0.6, 1.2].forEach(at => SFX.tone(520, 0.09, { at, type: 'square', vol: 0.07 }));
+    SFX.tone(1040, 0.16, { at: 1.8, type: 'square', vol: 0.07 });
+  }
+}
+pads.forEach((pad, i) => {
+  // 조종판과 경기장은 너비가 같아서 손가락 위치가 곧 비행기 위치다
+  const steer = e => {
+    const r = dcv.getBoundingClientRect();
+    if (r.width > 0) DS.planes[i].tx = clamp((e.clientX - r.left) / r.width, 0, 1);
+  };
+  pad.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { pad.setPointerCapture(e.pointerId); } catch (err) {}
+    steer(e);
+    duelSetReady(i);
+  });
+  pad.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse' && !(e.buttons & 1)) return;
+    steer(e);
+  });
+  pad.addEventListener('contextmenu', e => e.preventDefault());
+});
+$('dcard-btn').addEventListener('click', () => { if (dAct) dAct(); });
+// 키보드(컴퓨터에서 할 때): 위쪽 A·D, 아래쪽 ←·→, 스페이스로 둘 다 준비
+document.addEventListener('keydown', e => {
+  if (cur !== 'duel') return;
+  if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) { keys.add(e.code); e.preventDefault(); }
+  else if (e.code === 'Space' && dphase === 'ready') { e.preventDefault(); duelSetReady(0); duelSetReady(1); }
+});
+document.addEventListener('keyup', e => keys.delete(e.code));
+function duelKeys() {
+  [['KeyA', 'KeyD'], ['ArrowLeft', 'ArrowRight']].forEach(([l, r], i) => {
+    const p = DS.planes[i];
+    const dir = (keys.has(r) ? 1 : 0) - (keys.has(l) ? 1 : 0);
+    if (dir) { p.tx = clamp(p.x + dir * 0.2, 0, 1); p.kb = true; }
+    else if (p.kb) { p.tx = p.x; p.kb = false; }
+  });
+}
+function duelUpdate(dt) {
+  if (!DU) return;
+  const W = dcv.clientWidth, H = dcv.clientHeight;
+  if (!W || !H) return;
+  duelKeys();
+  if (dphase === 'count') {
+    const el = performance.now() - tCountD;
+    const n = 3 - Math.floor(el / 600);
+    if (n !== dLast && n >= 1) { dLast = n; duelMsg(String(n), String(n)); }
+    if (el >= 1800) { dphase = 'play'; duelMsg(null, null); }
+  }
+  if (dphase === 'play') {
+    // 빠른 미사일이 비행기를 건너뛰지 않도록 잘게 나눠 계산한다
+    const steps = Math.max(1, Math.ceil(dt * 120)), h = dt / steps;
+    let fired = false, hit = false;
+    for (let i = 0; i < steps; i++) {
+      const ev = duelStep(DS, h, W, H);
+      fired = fired || ev.fired;
+      ev.hit.forEach(q => {
+        hit = true;
+        pads[q].classList.remove('hit'); void pads[q].offsetWidth; pads[q].classList.add('hit');
+      });
+      if (DS.planes[0].lives <= 0 || DS.planes[1].lives <= 0 || DS.t >= DUEL_LIMIT) {
+        if (hit) { renderLives(); SFX.boom(); }
+        duelOver();
+        return;
+      }
+    }
+    if (hit) { renderLives(); SFX.boom(); }
+    else if (fired) SFX.shot();
+  } else {
+    duelMove(DS, dt, duelGeom(W, H));
+    if (dphase === 'over') DS.t += dt;               // 폭발 그림이 끝까지 보이게 시간만 흘린다
+  }
+}
+function duelOver() {
+  token++;
+  const my = token;
+  dphase = 'over';
+  const l = DS.planes.map(p => p.lives);
+  const win = l[0] === l[1] ? -1 : (l[0] > l[1] ? 0 : 1);     // 동시에 격추되거나 시간 종료 때 목숨이 같으면 무승부
+  const timeUp = l[0] > 0 && l[1] > 0;
+  DS.shots.length = 0;
+  [0, 1].forEach(i => {
+    $('phint-' + i).textContent = win < 0 ? '무승부' : i === win ? '승리!' : '패배';
+    pads[i].classList.add('done');
+  });
+  if (win < 0) duelMsg('무승부', '무승부');
+  else {
+    duelMsg(win === 0 ? '승리!' : '패배', win === 1 ? '승리!' : '패배');
+    [0, 1].forEach(i => {
+      const st = DU.stats[DU.cur[i]];
+      st.hits += DS.planes[i].hits;
+      st.lost += DUEL_LIVES - l[i];
+    });
+    DU.stats[DU.cur[win]].wins++;
+    DU.champ = DU.cur[win];
+    SFX.fanfare();
+  }
+  setTimeout(() => {
+    if (my !== token) return;
+    duelMsg(null, null);
+    if (win < 0) {
+      duelCard('무승부', timeUp ? DUEL_LIMIT + '초 동안 승부가 나지 않았습니다.' : '둘이 동시에 격추됐습니다.', '재대결', () => duelReady(''));
+      return;
+    }
+    const wName = DU.names[DU.cur[win]];
+    const how = timeUp ? '시간이 다 되어 남은 목숨이 많은 쪽이 이겼습니다. ' : '';
+    if (DU.next < DU.names.length) {
+      const nx = DU.next;
+      duelCard(wName + ' 승리', how + '다음 상대는 ' + DU.names[nx] + '입니다. 진 사람 자리에 앉으세요.', '다음 대결', () => {
+        DU.cur[1 - win] = nx; DU.next++; DU.match++;
+        duelReady('');
+      });
+    } else {
+      duelCard(wName + ' 승리', how + (DU.names.length > 2 ? '연승전이 끝났습니다.' : '목숨 ' + l[win] + '개를 남겼습니다.'), '결과 보기', duelFinal);
+    }
+  }, 900);
+}
+/* 최종 순위: 마지막 대결의 승자가 1등. 나머지는 승수, 명중 횟수, 덜 맞은 순. */
+function duelFinal() {
+  token++;
+  dphase = 'idle';
+  const n = DU.names.length;
+  const arr = DU.names.map((name, i) => ({ name, wins: DU.stats[i].wins, hits: DU.stats[i].hits, lost: DU.stats[i].lost, champ: i === DU.champ ? 1 : 0 }))
+    .sort((a, b) => b.champ - a.champ || b.wins - a.wins || b.hits - a.hits || a.lost - b.lost);
+  assignRanks(arr, (a, b) => a.champ === b.champ && a.wins === b.wins && a.hits === b.hits && a.lost === b.lost);
+  const lastRank = Math.max(...arr.map(r => r.rank));
+  const losers = arr.filter(r => r.rank === lastRank);
+  const lr = arr[arr.length - 1];
+
+  $('res-eyebrow').textContent = DUEL_META.title + ' · 최종 결과' + (n > 2 ? ' · 연승전' : '');
+  $('res-title').textContent = '1등 ' + arr[0].name;
+  $('res-loser').hidden = false;
+  $('loser-tag').textContent = losers.length > 1 ? '공동 꼴찌' : '꼴찌';
+  $('loser-name').textContent = losers.map(r => r.name).join(', ');
+  $('loser-why').textContent = n > 2 ? lr.wins + '승 · 명중 ' + lr.hits + '번'
+    : lr.lost >= DUEL_LIVES ? '세 번 맞아 격추됐습니다.' : '남은 목숨이 더 적었습니다.';
+  let sub = '마지막 대결의 승자가 1등이고, 나머지는 승수와 명중 횟수 순입니다.';
+  if (n === 2) {
+    const key = arr.map(r => r.name).sort().join('\u0001');
+    if (duelTally.key !== key) { duelTally.key = key; duelTally.wins = {}; }
+    duelTally.wins[arr[0].name] = (duelTally.wins[arr[0].name] || 0) + 1;
+    const total = Object.values(duelTally.wins).reduce((a, b) => a + b, 0);
+    sub = total > 1 ? '지금까지 ' + DU.names.map(nm => nm + ' ' + (duelTally.wins[nm] || 0) + '승').join(' · ') : '';
+  }
+  $('res-sub').textContent = sub;
+  $('rank').innerHTML = arr.map(r => {
+    const cls = 'rk nocup' + (r.rank === 1 ? ' first' : '') + (r.rank === lastRank ? ' last' : '');
+    const detail = n > 2 ? r.wins + '승 · 명중 ' + r.hits + '번'
+      : r.rank === 1 ? '남은 목숨 ' + (DUEL_LIVES - r.lost) + '개 · 명중 ' + r.hits + '번' : '명중 ' + r.hits + '번';
+    return '<li class="' + cls + '"><span class="pos">' + r.rank + '</span>'
+      + '<span class="who2"><span class="nm">' + esc(r.name) + '</span><span class="sub">' + detail + '</span></span>'
+      + '<span class="val"><b>' + r.rank + '등</b></span></li>';
+  }).join('');
+  const names = DU.names.slice(), tieNames = losers.map(r => r.name);
+  setActions('같은 멤버로 한 판 더', () => startDuel(names),
+    losers.length > 1 ? '꼴찌 결정전 (' + tieNames.length + '명)' : null,
+    () => startDuel(tieNames), true);
+  show('result');
+  SFX.fanfare();
+}
 
 /* ───────── 결과 ───────── */
 let svgSeq = 0;
@@ -1588,16 +2099,19 @@ $('form').addEventListener('submit', e => {
   SFX.on = cfg.sfx;
   SFX.init();
   const names = Array.from({ length: cfg.n }, (_, i) => (cfg.names[i] || '').trim() || (i + 1) + '번');
-  newGame(cfg.game, names, cfg.rounds, { irr: cfg.irr, blind: cfg.blind });
+  if (cfg.game === 'duel') startDuel(names);
+  else newGame(cfg.game, names, cfg.rounds, { irr: cfg.irr, blind: cfg.blind });
 });
 
 /* ───────── 게임 선택과 시범 장면 ───────── */
+const META = { pour: POUR, react: REACT, duel: DUEL_META };
 function applyGame() {
-  const mod = MODS[cfg.game];
+  const mod = META[cfg.game];
   $('game-' + cfg.game).checked = true;
   $('game-title').textContent = mod.title;
   $('rules').innerHTML = mod.rules.map(x => '<li>' + esc(x) + '</li>').join('');
   document.querySelectorAll('.only-pour').forEach(el => { el.hidden = cfg.game !== 'pour'; });
+  document.querySelectorAll('.no-duel').forEach(el => { el.hidden = cfg.game === 'duel'; });
 }
 document.querySelectorAll('input[name="game"]').forEach(r => r.addEventListener('change', () => {
   if (!r.checked) return;
@@ -1635,6 +2149,16 @@ function demoBoil(dt) {
   bClock += dt;
   BD.on = bClock % 4.2 > 2.6;
 }
+// 맞대결 시범: 두 비행기가 알아서 오가며 쏜다(맞아도 닳지 않는다)
+const DD = mkDuel(true);
+DD.planes[0].x = DD.planes[0].tx = 0.34;
+DD.planes[1].x = DD.planes[1].tx = 0.66;
+function demoDuel(dt, t, W, H) {
+  if (reduceMotion || !W || !H) return;
+  DD.planes[0].tx = 0.5 + 0.34 * Math.sin(t * 1.1) + 0.07 * Math.sin(t * 2.9);
+  DD.planes[1].tx = 0.5 + 0.34 * Math.sin(t * 0.9 + 2.2) + 0.07 * Math.sin(t * 3.3);
+  duelStep(DD, dt, W, H);
+}
 
 /* ───────── 루프 ───────── */
 readTokens();
@@ -1653,7 +2177,11 @@ function frame(ts) {
   lastT = t;
   if (cur === 'setup') {
     if (cfg.game === 'pour') { demoPour(dt); tickScene(D, dt); paint(heroCv, drawPour, D, t, dt); }
-    else { demoBoil(dt); tickBoil(BD, dt); paint(heroCv, drawBoil, BD, t, dt); }
+    else if (cfg.game === 'react') { demoBoil(dt); tickBoil(BD, dt); paint(heroCv, drawBoil, BD, t, dt); }
+    else { demoDuel(dt, t, heroCv.clientWidth, heroCv.clientHeight); paint(heroCv, drawDuel, DD, t, dt); }
+  } else if (cur === 'duel') {
+    duelUpdate(dt);
+    paint(dcv, drawDuel, DS, t, dt);
   } else if (cur === 'play' && G) {
     const mod = G.mod;
     mod.update(performance.now());
