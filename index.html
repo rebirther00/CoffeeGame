@@ -36,6 +36,8 @@
   --kettle-dk: #A9200E;
   --sleeve: #CBA063;
   --dash: #FFD02E;
+  --stove: #4B352A;
+  --flame: #FF7A1A;
   --font-display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
@@ -154,6 +156,19 @@ ol, ul { list-style: none; }
   padding-bottom: 6px;
   border-bottom: 5px dashed var(--danger);
 }
+.games { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-bottom: 4px; }
+.game { position: relative; cursor: pointer; min-width: 0; }
+.game input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.game span {
+  display: flex; flex-direction: column; gap: 1px; height: 100%;
+  border: 2.5px solid var(--line); border-radius: 16px; padding: 8px 12px 9px;
+  background: var(--surface); color: var(--surface-fg); box-shadow: 0 4px 0 var(--shadow);
+  transition: transform .06s, box-shadow .06s;
+}
+.game small { font-size: 12.5px; font-weight: 700; opacity: .75; }
+.game b { font: 400 20px/1.15 var(--font-display); }
+.game input:checked + span { background: var(--primary); color: var(--primary-fg); transform: translateY(2px); box-shadow: 0 2px 0 var(--shadow); }
+.game input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 3px; }
 .stage.hero { flex: 0 0 auto; height: 190px; height: clamp(160px, 27vh, 230px); }
 .rules { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
 .rules li { padding-left: 18px; position: relative; }
@@ -232,6 +247,7 @@ ol, ul { list-style: none; }
   position: absolute; left: 20px; top: 8px;
   font: 400 104px/1 var(--font-display); color: var(--ink); pointer-events: none;
 }
+.count.word { font-size: 68px; top: 14px; left: 16px; }
 .count.pop { animation: pop .5s ease-out both; }
 .stamp {
   position: absolute; left: 14px; top: 16px; transform: rotate(-7deg);
@@ -258,7 +274,7 @@ ol, ul { list-style: none; }
 }
 .btn.stop:active { transform: translateY(6px); box-shadow: 0 2px 0 var(--shadow); }
 .btn.stop.wait { background: color-mix(in srgb, var(--danger) 45%, var(--bg)); font-size: 34px; }
-.verdict { font: 400 30px/1.1 var(--font-display); }
+.verdict { font: 400 30px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
 .verdict.bad { color: var(--danger-text); }
 .detail { font-size: 14.5px; font-variant-numeric: tabular-nums; }
 
@@ -309,7 +325,7 @@ ol, ul { list-style: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .count.pop, .stamp { animation: none; }
-  .btn, .toggle i, .toggle i::after { transition: none; }
+  .btn, .toggle i, .toggle i::after, .game span { transition: none; }
 }
 </style>
 </head>
@@ -319,15 +335,15 @@ ol, ul { list-style: none; }
   <!-- 설정 -->
   <section id="setup" class="screen">
     <header class="brand">
-      <p class="eyebrow">종이컵 커피 따르기 내기</p>
-      <h1>선 넘지 마!</h1>
+      <p class="eyebrow">폰 하나로 돌려 가며 하는 커피 내기</p>
+      <h1 id="game-title">선 넘지 마!</h1>
     </header>
+    <div class="games" role="radiogroup" aria-label="게임 선택">
+      <label class="game"><input type="radio" name="game" id="game-pour" value="pour"><span><small>타이밍 게임</small><b>커피 따르기</b></span></label>
+      <label class="game"><input type="radio" name="game" id="game-react" value="react"><span><small>반응속도 게임</small><b>주전자 끓이기</b></span></label>
+    </div>
     <div class="stage hero"><canvas id="hero" aria-hidden="true"></canvas></div>
-    <ul class="rules">
-      <li>돌아가며 한 번씩, 따라지는 커피를 버튼으로 멈춥니다.</li>
-      <li>목표선에 가까울수록 순위가 높습니다.</li>
-      <li>선을 넘기면 무조건 하위, 많이 넘길수록 더 아래입니다.</li>
-    </ul>
+    <ul class="rules" id="rules"></ul>
     <form id="form" autocomplete="off">
       <div class="opts">
         <div class="row">
@@ -347,11 +363,11 @@ ol, ul { list-style: none; }
             <label><input type="radio" name="rounds" id="rounds-5" value="5"><span>5판</span></label>
           </div>
         </div>
-        <label class="row toggle" for="opt-irr">
+        <label class="row toggle only-pour" for="opt-irr">
           <span class="label">속도 불규칙<small>커피 줄기가 빨라졌다 느려집니다</small></span>
           <input type="checkbox" id="opt-irr"><i></i>
         </label>
-        <label class="row toggle" for="opt-blind">
+        <label class="row toggle only-pour" for="opt-blind">
           <span class="label">블라인드 구간<small>목표선 근처 수위를 컵홀더로 가립니다</small></span>
           <input type="checkbox" id="opt-blind"><i></i>
         </label>
@@ -426,54 +442,11 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const rand = (a, b) => a + Math.random() * (b - a);
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const mm = x => (Math.round(Math.abs(x) * 10) / 10).toFixed(1);
+const overMm = x => (Math.abs(x) < 0.1 ? '0.1' : mm(x));
+const sec = ms => (ms / 1000).toFixed(3);
 
-/* ───────── 컵 모형 ─────────
-   종이컵은 위가 넓은 원뿔대라서 같은 양을 부어도 위로 갈수록 수위가 천천히 오른다.
-   부피 비율 v(0~1)를 높이 비율 h(0~1)로 바꾼다. */
-const CUP_K = 0.40;                      // (윗지름 / 아랫지름) - 1
-const CUP_MM = 75;                       // 화면에 표시하는 컵 안쪽 높이(mm)
-const V_FULL = 1 + CUP_K + CUP_K * CUP_K / 3;
-function hFromV(v) {
-  const y = clamp(v, 0, 1) * V_FULL;
-  let h = clamp(v, 0, 1);
-  for (let i = 0; i < 8; i++) {
-    const f = h + CUP_K * h * h + CUP_K * CUP_K * h * h * h / 3 - y;
-    const d = 1 + 2 * CUP_K * h + CUP_K * CUP_K * h * h;
-    h -= f / d;
-  }
-  return clamp(h, 0, 1);
-}
-
-/* 한 판의 조건: 목표선과 따르는 속도. 그 판의 모든 사람이 같은 조건으로 겨룬다. */
-function makeRound(opts) {
-  const target = rand(0.50, 0.86);
-  const T = rand(3.0, 5.0);              // 기준 속도로 컵이 가득 차는 시간(초)
-  const pr = opts.irr ? {
-    a1: rand(0.32, 0.50), f1: rand(0.30, 0.62), p1: rand(0, TAU),
-    a2: rand(0.16, 0.30), f2: rand(0.95, 1.70), p2: rand(0, TAU)
-  } : null;
-  const mult = t => pr
-    ? clamp(1 + pr.a1 * Math.sin(TAU * pr.f1 * t + pr.p1) + pr.a2 * Math.sin(TAU * pr.f2 * t + pr.p2), 0.4, 1.8)
-    : 1;
-  // 1ms 단위 누적 부피표. 프레임 속도와 무관하게 누른 시각만으로 수위가 정해진다.
-  const cum = [0];
-  let v = 0, i = 0;
-  while (v < 1 && i < 30000) {
-    v += mult((i + 0.5) / 1000) / T / 1000;
-    cum.push(v);
-    i++;
-  }
-  const prev = cum[i - 1];
-  const brim = (i - 1 + (1 - prev) / Math.max(1e-9, cum[i] - prev)) / 1000;   // 가득 차는 시각(초)
-  const vAt = t => {
-    const x = clamp(t * 1000, 0, cum.length - 1);
-    const j = Math.floor(x), f = x - j;
-    return j + 1 < cum.length ? cum[j] + (cum[j + 1] - cum[j]) * f : cum[j];
-  };
-  return { target, mult, vAt, brim };
-}
-
-/* 한 판의 순위: 안 넘긴 사람이 먼저(선에 가까운 순), 넘긴 사람은 그 아래(덜 넘긴 순). */
+/* 순위: key가 작을수록 위. 같은 key는 같은 등수. */
 function assignRanks(sorted, same) {
   let rank = 1;
   sorted.forEach((r, i) => {
@@ -483,14 +456,8 @@ function assignRanks(sorted, same) {
   return sorted;
 }
 function rankRound(results) {
-  const s = results.map(r => ({ ...r, key: r.over ? 1e6 + r.err : -r.err })).sort((a, b) => a.key - b.key);
+  const s = results.map(r => ({ ...r })).sort((a, b) => a.key - b.key);
   return assignRanks(s, (a, b) => Math.abs(a.key - b.key) < 1e-7);
-}
-const mm = x => (Math.round(Math.abs(x) * 10) / 10).toFixed(1);
-function errText(r) {
-  if (r.brim) return '가득 넘침';
-  if (r.over) return '+' + (Math.abs(r.err) < 0.1 ? '0.1' : mm(r.err)) + 'mm 넘김';
-  return mm(r.err) + 'mm 남김';
 }
 
 /* ───────── 소리·진동 ───────── */
@@ -568,6 +535,23 @@ const SFX = {
       p.src.stop(t + 0.2);
     } catch (e) {}
   },
+  // 물 끓는 소리. 신호 시점을 알려 주지 않도록 크기와 높이를 고정한다.
+  simmer() {
+    this.pourStart();
+    const p = this.pour;
+    if (!p) return;
+    try {
+      const t = this.ac.currentTime;
+      p.bp.frequency.setValueAtTime(230, t);
+      p.g.gain.cancelScheduledValues(t);
+      p.g.gain.setTargetAtTime(0.07, t, 0.1);
+    } catch (e) {}
+  },
+  whistle() {
+    this.tone(2050, 0.55, { to: 2500, vol: 0.14 });
+    this.tone(3075, 0.55, { to: 3750, vol: 0.05 });
+    this.buzz(45);
+  },
   buzz(pattern) {
     if (!this.on) return;
     try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
@@ -576,13 +560,13 @@ const SFX = {
   perfect() { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.22, { at: i * 0.09, type: 'triangle', vol: 0.2 })); this.buzz([15, 40, 15, 40, 30]); },
   close() { this.tone(660, 0.16, { type: 'triangle' }); this.tone(880, 0.26, { at: 0.13, type: 'triangle' }); },
   ok() { this.tone(520, 0.2, { type: 'triangle', vol: 0.14 }); },
-  early() { this.tone(330, 0.22, { type: 'triangle', vol: 0.14, to: 260 }); },
+  meh() { this.tone(330, 0.22, { type: 'triangle', vol: 0.14, to: 260 }); },
   over() { this.tone(300, 0.5, { type: 'sawtooth', vol: 0.14, to: 110 }); this.buzz([90, 50, 140]); },
   flood() { this.tone(260, 0.8, { type: 'sawtooth', vol: 0.16, to: 70 }); this.buzz([120, 60, 120, 60, 260]); },
   fanfare() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i === 3 ? 0.5 : 0.16, { at: i * 0.14, type: 'triangle', vol: 0.2 })); }
 };
 
-/* ───────── 무대 그리기 ───────── */
+/* ───────── 그림 공통 ───────── */
 const COL = {};
 let FONT_BODY = 'sans-serif';
 function readTokens() {
@@ -592,7 +576,117 @@ function readTokens() {
   COL.coffee = g('--coffee'); COL.crema = g('--crema');
   COL.kettle = g('--kettle'); COL.kettleDk = g('--kettle-dk');
   COL.sleeve = g('--sleeve'); COL.dash = g('--dash'); COL.table = g('--table');
+  COL.stove = g('--stove'); COL.flame = g('--flame');
   FONT_BODY = getComputedStyle(document.body).fontFamily || 'sans-serif';
+}
+function drawTable(ctx, c, W, H, tableY, lw) {
+  ctx.fillStyle = c.table;
+  ctx.fillRect(0, tableY, W, H - tableY);
+  ctx.strokeStyle = c.ink; ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(-5, tableY); ctx.lineTo(W + 5, tableY); ctx.stroke();
+}
+/* 주전자. 몸통 중심이 원점, 몸통 반지름이 1인 좌표에서 그린다. lid는 뚜껑이 들린 높이(음수가 위). */
+const KETTLE_TIP = { x: -1.715, y: -0.645 };
+function drawKettle(ctx, c, klw, lid) {
+  ctx.strokeStyle = c.ink;
+  // 손잡이
+  ctx.beginPath(); ctx.moveTo(-0.66, -0.5); ctx.bezierCurveTo(-0.8, -1.62, 0.8, -1.62, 0.66, -0.5);
+  ctx.lineWidth = 0.2; ctx.stroke();
+  ctx.strokeStyle = c.kettleDk; ctx.lineWidth = Math.max(0.02, 0.2 - klw * 2); ctx.stroke();
+  ctx.strokeStyle = c.ink; ctx.lineWidth = klw;
+  // 주둥이
+  ctx.beginPath();
+  ctx.moveTo(-0.84, 0.48);
+  ctx.bezierCurveTo(-1.38, 0.4, -1.42, -0.22, -1.8, -0.56);
+  ctx.lineTo(-1.63, -0.73);
+  ctx.bezierCurveTo(-1.34, -0.44, -1.24, -0.1, -0.88, -0.14);
+  ctx.closePath();
+  ctx.fillStyle = c.kettleDk; ctx.fill(); ctx.stroke();
+  // 몸통
+  ctx.beginPath();
+  ctx.moveTo(-0.8, 0.74);
+  ctx.quadraticCurveTo(-1.1, 0.72, -1.06, 0.26);
+  ctx.bezierCurveTo(-1.0, -0.42, -0.56, -0.7, 0, -0.7);
+  ctx.bezierCurveTo(0.56, -0.7, 1.0, -0.42, 1.06, 0.26);
+  ctx.quadraticCurveTo(1.1, 0.72, 0.8, 0.74);
+  ctx.closePath();
+  ctx.fillStyle = c.kettle; ctx.fill(); ctx.stroke();
+  // 바닥 띠
+  ctx.beginPath(); ctx.moveTo(-1.02, 0.5); ctx.quadraticCurveTo(0, 0.6, 1.02, 0.5);
+  ctx.lineWidth = klw * 0.8; ctx.stroke();
+  // 윤기
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.09;
+  ctx.beginPath(); ctx.moveTo(0.42, -0.5); ctx.quadraticCurveTo(0.78, -0.3, 0.86, 0.08); ctx.stroke();
+  // 뚜껑과 꼭지
+  ctx.strokeStyle = c.ink; ctx.lineWidth = klw;
+  if (lid < -0.01) {
+    ctx.beginPath(); ctx.ellipse(0, -0.68, 0.4, 0.07, 0, 0, TAU);
+    ctx.fillStyle = c.ink; ctx.fill();
+  }
+  ctx.save();
+  ctx.translate(0, lid);
+  ctx.beginPath(); ctx.ellipse(0, -0.69, 0.46, 0.09, 0, 0, TAU);
+  ctx.fillStyle = c.kettleDk; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, -0.87, 0.1, 0, TAU);
+  ctx.fillStyle = c.ink; ctx.fill();
+  ctx.restore();
+}
+function paint(canvas, draw, s, t, dt) {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw(ctx, w, h, s, t, dt);
+}
+
+/* ═════════ 게임 1: 커피 따르기 ═════════ */
+
+/* 종이컵은 위가 넓은 원뿔대라서 같은 양을 부어도 위로 갈수록 수위가 천천히 오른다.
+   부피 비율 v(0~1)를 높이 비율 h(0~1)로 바꾼다. */
+const CUP_K = 0.40;                      // (윗지름 / 아랫지름) - 1
+const CUP_MM = 75;                       // 화면에 표시하는 컵 안쪽 높이(mm)
+const V_FULL = 1 + CUP_K + CUP_K * CUP_K / 3;
+function hFromV(v) {
+  const y = clamp(v, 0, 1) * V_FULL;
+  let h = clamp(v, 0, 1);
+  for (let i = 0; i < 8; i++) {
+    const f = h + CUP_K * h * h + CUP_K * CUP_K * h * h * h / 3 - y;
+    const d = 1 + 2 * CUP_K * h + CUP_K * CUP_K * h * h;
+    h -= f / d;
+  }
+  return clamp(h, 0, 1);
+}
+
+/* 한 판의 조건: 목표선과 따르는 속도. 그 판의 모든 사람이 같은 조건으로 겨룬다. */
+function makeRound(opts) {
+  const target = rand(0.50, 0.86);
+  const T = rand(3.0, 5.0);              // 기준 속도로 컵이 가득 차는 시간(초)
+  const pr = opts.irr ? {
+    a1: rand(0.32, 0.50), f1: rand(0.30, 0.62), p1: rand(0, TAU),
+    a2: rand(0.16, 0.30), f2: rand(0.95, 1.70), p2: rand(0, TAU)
+  } : null;
+  const mult = t => pr
+    ? clamp(1 + pr.a1 * Math.sin(TAU * pr.f1 * t + pr.p1) + pr.a2 * Math.sin(TAU * pr.f2 * t + pr.p2), 0.4, 1.8)
+    : 1;
+  // 1ms 단위 누적 부피표. 프레임 속도와 무관하게 누른 시각만으로 수위가 정해진다.
+  const cum = [0];
+  let v = 0, i = 0;
+  while (v < 1 && i < 30000) {
+    v += mult((i + 0.5) / 1000) / T / 1000;
+    cum.push(v);
+    i++;
+  }
+  const prev = cum[i - 1];
+  const brim = (i - 1 + (1 - prev) / Math.max(1e-9, cum[i] - prev)) / 1000;   // 가득 차는 시각(초)
+  const vAt = t => {
+    const x = clamp(t * 1000, 0, cum.length - 1);
+    const j = Math.floor(x), f = x - j;
+    return j + 1 < cum.length ? cum[j] + (cum[j + 1] - cum[j]) * f : cum[j];
+  };
+  return { target, mult, vAt, brim };
 }
 
 function mkScene() {
@@ -617,7 +711,7 @@ function tickScene(s, dt) {
   if (s.drain && s.h > 0) s.h = Math.max(0, s.h - dt * 3);
 }
 
-function drawScene(ctx, W, H, s, t, dt) {
+function drawPour(ctx, W, H, s, t, dt) {
   const c = COL;
   ctx.clearRect(0, 0, W, H);
   ctx.lineJoin = 'round';
@@ -643,28 +737,23 @@ function drawScene(ctx, W, H, s, t, dt) {
   };
   const ellipse = (x, y, rx, ry) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill(); };
 
-  // 탁자
-  ctx.fillStyle = c.table;
-  ctx.fillRect(0, tableY, W, H - tableY);
-  ctx.strokeStyle = c.ink; ctx.lineWidth = lw;
-  ctx.beginPath(); ctx.moveTo(-5, tableY); ctx.lineTo(W + 5, tableY); ctx.stroke();
+  drawTable(ctx, c, W, H, tableY, lw);
   ctx.fillStyle = 'rgba(42,21,9,.2)';
   ellipse(cx, tableY + lw * 1.6, bw * 0.66, Math.max(3, ch * 0.024));
 
   // 주전자 자세
   const TH = 0.62;                                       // 다 기울였을 때 각도(rad)
-  const TIP = { x: -1.715, y: -0.645 };                  // 주둥이 끝(주전자 좌표)
   const rot = (p, a) => ({ x: p.x * Math.cos(a) - p.y * Math.sin(a), y: p.x * Math.sin(a) + p.y * Math.cos(a) });
   const gap = ch * 0.24;
   const tipGoal = { x: cx + tw * 0.12, y: top - gap };
   const k = Math.max(8, Math.min(ch * 0.33, (top - gap - 6) / 1.92, (W - tipGoal.x - 4) / 2.95));
-  const rFull = rot(TIP, -TH);
+  const rFull = rot(KETTLE_TIP, -TH);
   const pivot = { x: tipGoal.x - rFull.x * k, y: tipGoal.y - rFull.y * k };
   const up = 1 - s.tilt;
   const ang = -TH * s.tilt;
   const px = pivot.x + up * k * 0.1;
   const py = pivot.y - up * k * 0.04 + Math.sin(t * 1.7) * k * 0.018 * up;
-  const rt = rot(TIP, ang);
+  const rt = rot(KETTLE_TIP, ang);
   const tip = { x: px + rt.x * k, y: py + rt.y * k };
 
   // 컵 안쪽
@@ -723,7 +812,7 @@ function drawScene(ctx, W, H, s, t, dt) {
     if (s.sHead >= 1) land = P2;
   }
 
-  // 튀는 방울
+  // 튀는 방울. 블라인드 구간에서는 방울이 수위를 알려 주지 않게 한다.
   const hiddenSurf = s.sleeveGoal > 0 && s.h > s.target - 0.42;
   if (s.pouring && land && !hiddenSurf && s.parts.length < 26 && Math.random() < dt * 42 * s.mult) {
     s.parts.push({
@@ -839,62 +928,156 @@ function drawScene(ctx, W, H, s, t, dt) {
   // 주전자
   ctx.save();
   ctx.translate(px, py); ctx.rotate(ang); ctx.scale(k, k);
-  const klw = lw / k;
-  ctx.lineWidth = klw; ctx.strokeStyle = c.ink;
-  // 손잡이
-  ctx.beginPath(); ctx.moveTo(-0.66, -0.5); ctx.bezierCurveTo(-0.8, -1.62, 0.8, -1.62, 0.66, -0.5);
-  ctx.lineWidth = 0.2; ctx.stroke();
-  ctx.strokeStyle = c.kettleDk; ctx.lineWidth = 0.2 - klw * 2; ctx.stroke();
-  ctx.strokeStyle = c.ink; ctx.lineWidth = klw;
-  // 주둥이
-  ctx.beginPath();
-  ctx.moveTo(-0.84, 0.48);
-  ctx.bezierCurveTo(-1.38, 0.4, -1.42, -0.22, -1.8, -0.56);
-  ctx.lineTo(-1.63, -0.73);
-  ctx.bezierCurveTo(-1.34, -0.44, -1.24, -0.1, -0.88, -0.14);
-  ctx.closePath();
-  ctx.fillStyle = c.kettleDk; ctx.fill(); ctx.stroke();
-  // 몸통
-  ctx.beginPath();
-  ctx.moveTo(-0.8, 0.74);
-  ctx.quadraticCurveTo(-1.1, 0.72, -1.06, 0.26);
-  ctx.bezierCurveTo(-1.0, -0.42, -0.56, -0.7, 0, -0.7);
-  ctx.bezierCurveTo(0.56, -0.7, 1.0, -0.42, 1.06, 0.26);
-  ctx.quadraticCurveTo(1.1, 0.72, 0.8, 0.74);
-  ctx.closePath();
-  ctx.fillStyle = c.kettle; ctx.fill(); ctx.stroke();
-  // 바닥 띠
-  ctx.beginPath(); ctx.moveTo(-1.02, 0.5); ctx.quadraticCurveTo(0, 0.6, 1.02, 0.5);
-  ctx.lineWidth = klw * 0.8; ctx.stroke();
-  // 윤기
-  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.09;
-  ctx.beginPath(); ctx.moveTo(0.42, -0.5); ctx.quadraticCurveTo(0.78, -0.3, 0.86, 0.08); ctx.stroke();
-  // 뚜껑과 꼭지
-  ctx.strokeStyle = c.ink; ctx.lineWidth = klw;
-  ctx.beginPath(); ctx.ellipse(0, -0.69, 0.46, 0.09, 0, 0, TAU);
-  ctx.fillStyle = c.kettleDk; ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.arc(0, -0.87, 0.1, 0, TAU);
-  ctx.fillStyle = c.ink; ctx.fill();
+  drawKettle(ctx, c, lw / k, 0);
   ctx.restore();
 }
 
-function paint(canvas, s, t, dt) {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (!w || !h) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
-  const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
-  if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawScene(ctx, w, h, s, t, dt);
+/* ═════════ 게임 2: 주전자 끓이기(반응속도) ═════════ */
+function mkBoil() { return { on: false, armed: false, burst: 0, heat: 0.35, puffs: [] }; }
+function tickBoil(b, dt) {
+  b.burst += ((b.on ? 1 : 0) - b.burst) * (1 - Math.exp(-dt * (b.on ? 22 : 7)));
+  b.heat += ((b.armed ? 1 : 0.35) - b.heat) * (1 - Math.exp(-dt * 6));
+}
+function drawBoil(ctx, W, H, b, t, dt) {
+  const c = COL;
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const tableY = Math.round(H - Math.max(20, H * 0.085));
+  const k = Math.max(10, Math.min(W * 0.24, tableY * 0.25, 110));    // 주전자 크기
+  const lw = Math.max(2.5, k * 0.042);
+  const px = W * 0.56;
+  const stoveH = k * 0.5, stoveW = k * 3.0, plateH = k * 0.1, gapF = k * 0.4;
+  const plateY = tableY - stoveH - plateH;      // 삼발이 판 윗면
+  const baseY = plateY - gapF;                  // 주전자 바닥
+  const py = baseY - 0.74 * k;
+  const hot = b.burst;
+
+  // 신호가 뜨면 뒤에 햇살 무늬가 퍼진다
+  if (hot > 0.01) {
+    const R = Math.hypot(W, H);
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.66 * hot).toFixed(3) + ')';
+    for (let i = 0; i < 12; i++) {
+      const a = i * TAU / 12 + t * 0.4, w = TAU / 48;
+      ctx.beginPath(); ctx.moveTo(px, py);
+      ctx.lineTo(px + R * Math.cos(a - w), py + R * Math.sin(a - w));
+      ctx.lineTo(px + R * Math.cos(a + w), py + R * Math.sin(a + w));
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  drawTable(ctx, c, W, H, tableY, lw);
+
+  // 휴대용 버너
+  const sx = px - stoveW / 2, sy = tableY - stoveH, sr = k * 0.12;
+  ctx.beginPath();
+  ctx.moveTo(sx + sr, sy); ctx.lineTo(sx + stoveW - sr, sy);
+  ctx.quadraticCurveTo(sx + stoveW, sy, sx + stoveW, sy + sr);
+  ctx.lineTo(sx + stoveW, tableY); ctx.lineTo(sx, tableY); ctx.lineTo(sx, sy + sr);
+  ctx.quadraticCurveTo(sx, sy, sx + sr, sy);
+  ctx.closePath();
+  ctx.fillStyle = c.stove; ctx.fill();
+  ctx.strokeStyle = c.ink; ctx.lineWidth = lw; ctx.stroke();
+  ctx.beginPath(); ctx.arc(sx + stoveW * 0.16, sy + stoveH * 0.52, k * 0.13, 0, TAU);
+  ctx.fillStyle = c.dash; ctx.fill(); ctx.lineWidth = lw * 0.8; ctx.stroke();
+  ctx.lineWidth = lw * 0.8;
+  for (let i = 0; i < 3; i++) {
+    const x = sx + stoveW * (0.7 + i * 0.07);
+    ctx.beginPath(); ctx.moveTo(x, sy + stoveH * 0.3); ctx.lineTo(x, sy + stoveH * 0.72); ctx.stroke();
+  }
+  // 삼발이
+  ctx.fillStyle = c.ink;
+  ctx.fillRect(px - k * 1.25, plateY, k * 2.5, plateH + lw * 0.5);
+  ctx.lineWidth = lw * 1.6;
+  [-1, 1].forEach(side => {
+    ctx.beginPath(); ctx.moveTo(px + side * k * 0.98, plateY); ctx.lineTo(px + side * k * 0.98, baseY + lw); ctx.stroke();
+  });
+  // 불꽃
+  const fh = gapF * (0.45 + 0.6 * b.heat);
+  for (let i = 0; i < 5; i++) {
+    const x = px + (i - 2) * k * 0.31;
+    const h = fh * (0.82 + 0.22 * Math.sin(t * 13 + i * 1.9));
+    const w = k * 0.11;
+    const flame = (hh, ww) => {
+      ctx.beginPath();
+      ctx.moveTo(x - ww, plateY);
+      ctx.quadraticCurveTo(x - ww, plateY - hh * 0.55, x, plateY - hh);
+      ctx.quadraticCurveTo(x + ww, plateY - hh * 0.55, x + ww, plateY);
+      ctx.closePath();
+    };
+    flame(h, w); ctx.fillStyle = c.flame; ctx.fill();
+    ctx.strokeStyle = c.ink; ctx.lineWidth = lw * 0.6; ctx.stroke();
+    flame(h * 0.5, w * 0.5); ctx.fillStyle = c.dash; ctx.fill();
+  }
+
+  // 주전자. 기다리는 동안의 떨림은 일정하게 유지해 신호 시점을 알 수 없게 한다.
+  const shake = (b.armed ? 0.006 : 0) + hot * 0.03;
+  const jx = Math.sin(t * 37) * k * shake, jy = Math.cos(t * 29) * k * shake * 0.6;
+  ctx.save();
+  ctx.translate(px + jx, py + jy);
+  ctx.rotate(Math.sin(t * 33) * 0.025 * hot);
+  ctx.scale(k, k);
+  drawKettle(ctx, c, lw / k, -hot * (0.2 + 0.05 * Math.sin(t * 26)));
+  ctx.restore();
+
+  // 김
+  const tipX = px + KETTLE_TIP.x * k, tipY = py + KETTLE_TIP.y * k;
+  const calm = b.heat * (1 - hot);
+  if (calm > 0.05) {
+    ctx.strokeStyle = 'rgba(255,255,255,' + (0.75 * calm).toFixed(3) + ')';
+    ctx.lineWidth = lw * 1.2;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      for (let j = 0; j <= 10; j++) {
+        const u = j / 10;
+        const x = tipX - k * 0.1 - i * k * 0.2 - u * k * 0.25 + Math.sin(u * 5 + t * 2.4 + i * 2) * k * 0.07 * (0.3 + u);
+        const y = tipY - k * 0.12 - u * k * 0.7;
+        if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  if (b.on) {
+    const n = dt * 60;
+    let m = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
+    while (m-- > 0 && b.puffs.length < 70) {
+      const lidPuff = Math.random() < 0.3;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      b.puffs.push(lidPuff
+        ? { x: px + side * k * 0.4, y: py - k * 0.75, vx: side * k * rand(0.3, 1.1), vy: -k * rand(1.4, 2.6), r: k * 0.08, life: 0, max: rand(0.5, 0.9) }
+        : { x: tipX, y: tipY, vx: -k * rand(1.4, 3.0), vy: -k * rand(1.6, 3.6), r: k * 0.1, life: 0, max: rand(0.6, 1.1) });
+    }
+  }
+  for (let i = b.puffs.length - 1; i >= 0; i--) {
+    const p = b.puffs[i];
+    p.life += dt;
+    if (p.life >= p.max) { b.puffs.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 1 - Math.min(1, 1.6 * dt);
+    p.r += k * 0.55 * dt;
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.9 * (1 - p.life / p.max)).toFixed(3) + ')';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+  }
+  // 삑 소리 선
+  if (hot > 0.3) {
+    ctx.strokeStyle = c.ink; ctx.lineWidth = lw;
+    [-2.05, -2.5, -2.95].forEach(a => {
+      ctx.beginPath();
+      ctx.moveTo(tipX + Math.cos(a) * k * 0.28, tipY + Math.sin(a) * k * 0.28);
+      ctx.lineTo(tipX + Math.cos(a) * k * (0.5 + 0.1 * hot), tipY + Math.sin(a) * k * (0.5 + 0.1 * hot));
+      ctx.stroke();
+    });
+  }
 }
 
 /* ───────── 설정 화면 ───────── */
 const KEY = 'coffeegame.cfg.v1';
-const cfg = { n: 3, names: [], rounds: 1, irr: true, blind: false, sfx: true };
+const cfg = { game: 'pour', n: 3, names: [], rounds: 1, irr: true, blind: false, sfx: true };
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (saved && typeof saved === 'object') {
+    if (saved.game === 'pour' || saved.game === 'react') cfg.game = saved.game;
     if (Number.isInteger(saved.n)) cfg.n = clamp(saved.n, 2, 8);
     if (Array.isArray(saved.names)) cfg.names = saved.names.slice(0, 8).map(x => String(x || '').slice(0, 8));
     if ([1, 3, 5].includes(saved.rounds)) cfg.rounds = saved.rounds;
@@ -954,29 +1137,27 @@ function wake() {
 }
 function unwake() { try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
 
-/* ───────── 게임 진행 ───────── */
-const S = mkScene();                     // 게임 무대 상태
+/* ───────── 게임 진행(공통) ───────── */
 let G = null;                            // 진행 중인 게임
-let phase = 'idle';                      // ready → count → pour → done
-let tCount = 0, tPour = 0, lastCount = 0, token = 0, gameSeq = 0;
-const COUNT_MS = 1800;
+let phase = 'idle';
+let token = 0, gameSeq = 0;
+const btnGo = $('btn-go'), btnBig = $('btn-stop'), btnNext = $('btn-next');
+const NEXT_HINT = '폰을 넘겨받았으면 시작하세요.';
 
-const btnGo = $('btn-go'), btnStop = $('btn-stop'), btnNext = $('btn-next');
-
-function newGame(names, rounds, opts) {
+function newGame(game, names, rounds, opts) {
   G = {
-    players: names.map(name => ({ name, pts: 0, overs: 0, errSum: 0 })),
+    game, mod: MODS[game],
+    players: names.map(name => ({ name, pts: 0, bad: 0, sum: 0, cnt: 0 })),
     rounds, opts, r: 0, offset: gameSeq++, round: null, order: [], turn: 0, results: []
   };
   startRound();
 }
 function startRound() {
   const n = G.players.length;
-  G.round = makeRound(G.opts);
+  G.round = G.mod.newRound(G.opts);
   G.order = Array.from({ length: n }, (_, i) => (i + G.offset + G.r) % n);   // 판마다 첫 순서를 돌린다
   G.turn = 0;
   G.results = [];
-  S.h = 0;
   show('play');
   wake();
   toReady();
@@ -986,34 +1167,43 @@ function lockBriefly(btn, ms) {
   const my = token;
   setTimeout(() => { if (my === token) btn.disabled = false; }, ms);
 }
-function renderHud() {
+function renderHud(noCurrent) {
   $('hud-round').textContent = G.rounds > 1 ? (G.r + 1) + '판 / ' + G.rounds + '판' : '한 판 승부';
   const chips = $('chips');
   chips.innerHTML = G.order.map((p, i) => {
     const name = esc(G.players[p].name);
     const r = G.results[i];
-    if (r) return '<li class="chip' + (r.over ? ' over' : '') + '">' + name + ' <b>' + (r.brim ? '넘침' : (r.over ? '+' : '−') + mm(r.err)) + '</b></li>';
-    if (i === G.turn) return '<li class="chip now">' + name + '</li>';
+    if (r) return '<li class="chip' + (r.bad ? ' over' : '') + '">' + name + ' <b>' + esc(r.chip) + '</b></li>';
+    if (i === G.turn && !noCurrent) return '<li class="chip now">' + name + '</li>';
     return '<li class="chip todo">' + name + '</li>';
   }).join('');
   const now = chips.querySelector('.now');
   if (now && now.scrollIntoView) now.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
+function bigBtn(label, waiting) {
+  btnBig.hidden = false;
+  btnBig.textContent = label;
+  btnBig.classList.toggle('wait', waiting);
+}
+function showWord(text, word) {
+  const el = $('count');
+  el.hidden = false;
+  el.textContent = text;
+  el.classList.toggle('word', !!word);
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
 function toReady() {
   token++;
   phase = 'ready';
   SFX.pourStop();
-  const P = G.players[G.order[G.turn]];
-  S.target = G.round.target;
-  S.tiltGoal = 0; S.streamOn = false; S.pouring = false; S.mult = 1;
-  S.spillOn = false; S.steamOn = false; S.drain = true;
-  S.sleeveGoal = G.opts.blind ? 1 : 0;
-  $('who-name').textContent = P.name;
-  $('who-hint').textContent = G.turn === 0 && G.r === 0 ? '버튼을 누르면 셋을 센 뒤 커피를 따릅니다.' : '폰을 넘겨받았으면 시작하세요.';
+  const ui = G.mod.ready(G.turn === 0 && G.r === 0);
+  $('who-name').textContent = G.players[G.order[G.turn]].name;
+  $('who-hint').textContent = ui.hint;
+  btnGo.textContent = ui.go;
   $('count').hidden = true;
   $('stamp').hidden = true;
   $('p-ready').hidden = false;
-  btnStop.hidden = true;
+  btnBig.hidden = true;
   $('p-done').hidden = true;
   renderHud();
   lockBriefly(btnGo, 450);
@@ -1021,133 +1211,233 @@ function toReady() {
 function go() {
   if (phase !== 'ready') return;
   token++;
-  phase = 'count';
-  S.drain = false; S.h = 0; S.parts.length = 0;
-  tCount = performance.now();
-  tPour = tCount + COUNT_MS;
-  lastCount = 0;
   $('p-ready').hidden = true;
-  btnStop.hidden = false;
-  btnStop.classList.add('wait');
-  btnStop.textContent = '준비';
   SFX.init();
-  [0, 0.6, 1.2].forEach(at => SFX.tone(520, 0.09, { at, type: 'square', vol: 0.07 }));
-  SFX.tone(1040, 0.16, { at: 1.8, type: 'square', vol: 0.07 });
+  G.mod.go();
 }
-function gameUpdate() {
-  if (!G) return;
-  const now = performance.now();
-  if (phase === 'count') {
-    const n = 3 - Math.floor((now - tCount) / 600);
-    if (n !== lastCount && n >= 1) {
-      lastCount = n;
-      const el = $('count');
-      el.hidden = false;
-      el.textContent = n;
-      el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
-    }
-    if (now >= tPour - 520) S.tiltGoal = 1;
-    if (now >= tPour - 220) S.streamOn = true;
-    if (now >= tPour) {
-      phase = 'pour';
-      $('count').hidden = true;
-      S.pouring = true; S.sHead = 1;
-      btnStop.classList.remove('wait');
-      btnStop.textContent = '멈춰!';
-      SFX.pourStart();
-    }
-  }
-  if (phase === 'pour') {
-    const el = (now - tPour) / 1000;
-    if (el >= G.round.brim) { finish(tPour + G.round.brim * 1000, true); return; }
-    S.h = hFromV(G.round.vAt(el));
-    S.mult = G.round.mult(el);
-    SFX.pourSet(S.h, S.mult);
-  }
-}
-function evTime(e) {
-  const n = performance.now();
-  const t = e && e.timeStamp;
-  return (typeof t === 'number' && t > 0 && Math.abs(n - t) < 500) ? t : n;
-}
-function stop(ts) {
-  if (phase !== 'pour') return;
-  if (ts - tPour < 250) return;            // 시작 직후의 실수 터치는 무시
-  finish(ts, false);
-}
-function finish(ts, brim) {
+/* 한 사람의 차례가 끝났을 때: 기록을 남기고 잠시 뒤 판정을 보여 준다. */
+function endTurn(res, ui) {
   token++;
   const my = token;
   phase = 'done';
-  const R = G.round;
-  const el = clamp((ts - tPour) / 1000, 0, R.brim);
-  const h = brim ? 1 : hFromV(R.vAt(el));
-  S.h = h; S.pouring = false; S.streamOn = false; S.tiltGoal = 0; S.mult = 1; S.sleeveGoal = 0;
-  if (brim) S.spillOn = true; else S.steamOn = true;
+  res.p = G.order[G.turn];
+  G.results.push(res);
   SFX.pourStop();
   SFX.click();
-
-  const err = (h - R.target) * CUP_MM;
-  const over = err > 1e-6;
-  const res = { p: G.order[G.turn], h, err, over, brim };
-  G.results.push(res);
-
-  const a = Math.abs(err);
-  let verdict, detail, stamp = '', bad = false, snd;
-  if (brim) { verdict = '철철 넘쳤습니다'; detail = '컵이 가득 차도록 멈추지 않았습니다.'; stamp = '넘침!'; bad = true; snd = 'flood'; }
-  else if (over) { verdict = '선 넘었습니다'; detail = '목표선보다 ' + (a < 0.1 ? '0.1' : mm(err)) + 'mm 더 따랐습니다.'; stamp = '선 넘음!'; bad = true; snd = 'over'; }
-  else {
-    detail = '목표선까지 ' + mm(err) + 'mm 남겼습니다.';
-    if (a < 0.5) { verdict = '딱 맞췄습니다'; stamp = '딱!'; snd = 'perfect'; }
-    else if (a < 2) { verdict = '아슬아슬합니다'; snd = 'close'; }
-    else if (a < 7) { verdict = '무난합니다'; snd = 'ok'; }
-    else { verdict = '너무 일찍 멈췄습니다'; snd = 'early'; }
-  }
   const lastTurn = G.turn + 1 >= G.order.length;
   btnNext.textContent = lastTurn
     ? (G.r + 1 >= G.rounds ? '최종 결과 보기' : (G.r + 1) + '판 결과 보기')
     : '다음: ' + G.players[G.order[G.turn + 1]].name;
-
-  btnStop.hidden = true;
+  btnBig.hidden = true;
+  $('count').hidden = true;
   setTimeout(() => {
     if (my !== token) return;
-    $('verdict').textContent = verdict;
-    $('verdict').classList.toggle('bad', bad);
-    $('detail').textContent = detail;
+    $('verdict').textContent = ui.verdict;
+    $('verdict').classList.toggle('bad', !!ui.bad);
+    $('detail').textContent = ui.detail;
     $('p-done').hidden = false;
-    if (stamp) {
+    if (ui.stamp) {
       const st = $('stamp');
-      st.textContent = stamp;
-      st.classList.toggle('good', !bad);
+      st.textContent = ui.stamp;
+      st.classList.toggle('good', !ui.bad);
       st.hidden = false;
     }
-    renderHudDone();
-    SFX[snd]();
+    renderHud(true);
+    SFX[ui.snd]();
     lockBriefly(btnNext, 550);
-  }, G.opts.blind ? 650 : 380);
-}
-function renderHudDone() {
-  const turn = G.turn;
-  G.turn = -1;                             // 진행 중 표시 없이 결과만 갱신
-  renderHud();
-  G.turn = turn;
+  }, ui.delay);
 }
 function next() {
   if (phase !== 'done') return;
   if (G.turn + 1 < G.order.length) { G.turn++; toReady(); return; }
   endRound();
 }
+function evTime(e) {
+  const n = performance.now();
+  const t = e && e.timeStamp;
+  return (typeof t === 'number' && t > 0 && Math.abs(n - t) < 500) ? t : n;
+}
+
+/* ───────── 게임 1 진행: 커피 따르기 ───────── */
+const S = mkScene();
+let tCount = 0, tPour = 0, lastCount = 0;
+const COUNT_MS = 1800;
+const POUR = {
+  title: '선 넘지 마!',
+  rules: [
+    '돌아가며 한 번씩, 따라지는 커피를 버튼으로 멈춥니다.',
+    '목표선에 가까울수록 순위가 높습니다.',
+    '선을 넘기면 무조건 하위, 많이 넘길수록 더 아래입니다.'
+  ],
+  tieNote: '동점이면 넘긴 횟수가 적은 쪽, 그다음은 평균 오차가 작은 쪽이 위입니다.',
+  draw: drawPour, scene: S, tick: tickScene,
+  newRound: opts => makeRound(opts),
+  ready(first) {
+    S.target = G.round.target;
+    S.tiltGoal = 0; S.streamOn = false; S.pouring = false; S.mult = 1;
+    S.spillOn = false; S.steamOn = false; S.drain = true;
+    S.sleeveGoal = G.opts.blind ? 1 : 0;
+    return { go: '따르기 시작', hint: first ? '버튼을 누르면 셋을 센 뒤 커피를 따릅니다.' : NEXT_HINT };
+  },
+  go() {
+    phase = 'count';
+    S.drain = false; S.h = 0; S.parts.length = 0;
+    tCount = performance.now();
+    tPour = tCount + COUNT_MS;
+    lastCount = 0;
+    bigBtn('준비', true);
+    [0, 0.6, 1.2].forEach(at => SFX.tone(520, 0.09, { at, type: 'square', vol: 0.07 }));
+    SFX.tone(1040, 0.16, { at: 1.8, type: 'square', vol: 0.07 });
+  },
+  update(now) {
+    if (phase === 'count') {
+      const n = 3 - Math.floor((now - tCount) / 600);
+      if (n !== lastCount && n >= 1) { lastCount = n; showWord(n, false); }
+      if (now >= tPour - 520) S.tiltGoal = 1;
+      if (now >= tPour - 220) S.streamOn = true;
+      if (now >= tPour) {
+        phase = 'pour';
+        $('count').hidden = true;
+        S.pouring = true; S.sHead = 1;
+        bigBtn('멈춰!', false);
+        SFX.pourStart();
+      }
+    }
+    if (phase === 'pour') {
+      const el = (now - tPour) / 1000;
+      if (el >= G.round.brim) { POUR.finish(tPour + G.round.brim * 1000, true); return; }
+      S.h = hFromV(G.round.vAt(el));
+      S.mult = G.round.mult(el);
+      SFX.pourSet(S.h, S.mult);
+    }
+  },
+  press(ts) {
+    if (phase !== 'pour') return;
+    if (ts - tPour < 250) return;          // 시작 직후의 실수 터치는 무시
+    POUR.finish(ts, false);
+  },
+  finish(ts, brim) {
+    const R = G.round;
+    const el = clamp((ts - tPour) / 1000, 0, R.brim);
+    const h = brim ? 1 : hFromV(R.vAt(el));
+    S.h = h; S.pouring = false; S.streamOn = false; S.tiltGoal = 0; S.mult = 1; S.sleeveGoal = 0;
+    if (brim) S.spillOn = true; else S.steamOn = true;
+    const err = (h - R.target) * CUP_MM;
+    const over = err > 1e-6;
+    const a = Math.abs(err);
+    // 안 넘긴 사람이 먼저(선에 가까운 순), 넘긴 사람은 그 아래(덜 넘긴 순)
+    const res = {
+      h, err, over, brim, bad: over, stat: a,
+      key: over ? 1e6 + err : -err,
+      chip: brim ? '넘침' : (over ? '+' : '−') + mm(err),
+      text: brim ? '가득 넘침' : over ? '+' + overMm(err) + 'mm 넘김' : mm(err) + 'mm 남김'
+    };
+    const ui = { delay: G.opts.blind ? 650 : 380, bad: over };
+    if (brim) { ui.verdict = '철철 넘쳤습니다'; ui.detail = '컵이 가득 차도록 멈추지 않았습니다.'; ui.stamp = '넘침!'; ui.snd = 'flood'; }
+    else if (over) { ui.verdict = '선 넘었습니다'; ui.detail = '목표선보다 ' + overMm(err) + 'mm 더 따랐습니다.'; ui.stamp = '선 넘음!'; ui.snd = 'over'; }
+    else {
+      ui.detail = '목표선까지 ' + mm(err) + 'mm 남겼습니다.';
+      if (a < 0.5) { ui.verdict = '딱 맞췄습니다'; ui.stamp = '딱!'; ui.snd = 'perfect'; }
+      else if (a < 2) { ui.verdict = '아슬아슬합니다'; ui.snd = 'close'; }
+      else if (a < 7) { ui.verdict = '무난합니다'; ui.snd = 'ok'; }
+      else { ui.verdict = '너무 일찍 멈췄습니다'; ui.snd = 'meh'; }
+    }
+    endTurn(res, ui);
+  },
+  abort() { S.h = 0; },
+  icon: r => miniCup(r.h, G.round.target),
+  why: r => r.brim ? '컵이 넘치도록 따랐습니다.'
+    : r.over ? '선을 ' + overMm(r.err) + 'mm 넘겼습니다.'
+    : '목표선에서 ' + mm(r.err) + 'mm 모자랐습니다.',
+  total: (P, avg) => '넘김 ' + P.bad + '회 · 평균 오차 ' + mm(avg) + 'mm'
+};
+
+/* ───────── 게임 2 진행: 주전자 끓이기 ───────── */
+const B = mkBoil();
+let tArm = 0, tSignal = 0, tShown = 0;
+const LATE_MS = 3000;                    // 신호 뒤 이 시간 안에 못 누르면 시간 초과
+const FALSE_MS = 100;                    // 신호 뒤 이보다 빨리 누르면 예측으로 본다
+const REACT = {
+  title: '끓으면 눌러!',
+  rules: [
+    '돌아가며 한 번씩, 주전자가 끓는 순간 버튼을 누릅니다.',
+    '빨리 누를수록 순위가 높습니다.',
+    '끓기 전에 누르면 실격, 무조건 꼴찌입니다.'
+  ],
+  tieNote: '동점이면 실격이 적은 쪽, 그다음은 평균 반응 시간이 빠른 쪽이 위입니다.',
+  draw: drawBoil, scene: B, tick: tickBoil,
+  newRound: () => ({}),
+  ready(first) {
+    B.on = false; B.armed = false;
+    return { go: '준비 완료', hint: first ? '주전자가 끓으면 바로 누르세요. 미리 누르면 실격입니다.' : NEXT_HINT };
+  },
+  go() {
+    phase = 'wait';
+    tArm = performance.now();
+    tSignal = tArm + rand(2000, 6000);   // 끓는 시점은 차례마다 무작위
+    B.armed = true; B.on = false;
+    bigBtn('기다려', true);
+    SFX.simmer();
+  },
+  update(now) {
+    if (phase === 'wait' && now >= tSignal) {
+      phase = 'signal';
+      tShown = now;
+      B.on = true;
+      bigBtn('지금!', false);
+      showWord('지금!', true);
+      SFX.pourStop();
+      SFX.whistle();
+    } else if (phase === 'signal' && now - tShown >= LATE_MS) REACT.finish('late', LATE_MS);
+  },
+  press(ts) {
+    if (phase === 'wait') {
+      if (ts - tArm < 500) return;         // 준비 버튼을 누른 직후의 연속 터치는 무시
+      REACT.finish('early', 0, true);
+    } else if (phase === 'signal') {
+      const rt = ts - tShown;
+      if (rt < FALSE_MS) REACT.finish('early', rt, false);
+      else REACT.finish('ok', Math.min(rt, LATE_MS - 0.001));
+    }
+  },
+  finish(kind, rt, before) {
+    B.on = false; B.armed = false;
+    const res = { kind, rt, bad: kind === 'early' };
+    const ui = { delay: 320, bad: kind !== 'ok' };
+    if (kind === 'early') {
+      res.key = 1e6; res.stat = null; res.chip = '실격'; res.text = '부정 출발 (실격)';
+      ui.verdict = '부정 출발';
+      ui.detail = before ? '주전자가 끓기 전에 눌렀습니다. 실격입니다.' : '신호 뒤 0.1초 안에 눌렀습니다. 예측으로 보고 실격입니다.';
+      ui.stamp = '실격!'; ui.snd = 'over';
+    } else if (kind === 'late') {
+      res.key = LATE_MS; res.stat = LATE_MS; res.chip = '시간 초과'; res.text = '시간 초과';
+      ui.verdict = '시간 초과'; ui.detail = '3초 안에 누르지 못했습니다.'; ui.snd = 'flood';
+    } else {
+      res.key = rt; res.stat = rt; res.chip = sec(rt); res.text = sec(rt) + '초';
+      ui.verdict = sec(rt) + '초';
+      if (rt < 200) { ui.detail = '번개 같은 손입니다.'; ui.stamp = '번개!'; ui.snd = 'perfect'; }
+      else if (rt < 280) { ui.detail = '빠릅니다.'; ui.snd = 'close'; }
+      else if (rt < 400) { ui.detail = '무난합니다.'; ui.snd = 'ok'; }
+      else { ui.detail = '느긋합니다.'; ui.snd = 'meh'; }
+    }
+    endTurn(res, ui);
+  },
+  abort() {},
+  icon: null,
+  why: r => r.kind === 'early' ? '끓기 전에 눌러 실격했습니다.'
+    : r.kind === 'late' ? '3초 안에 누르지 못했습니다.'
+    : sec(r.rt) + '초로 가장 느렸습니다.',
+  total: (P, avg) => '실격 ' + P.bad + '회 · ' + (P.cnt ? '평균 ' + sec(avg) + '초' : '기록 없음')
+};
+const MODS = { pour: POUR, react: REACT };
 
 btnGo.addEventListener('click', go);
 btnNext.addEventListener('click', next);
-btnStop.addEventListener('pointerdown', e => { e.preventDefault(); stop(evTime(e)); });
-btnStop.addEventListener('click', e => e.preventDefault());
+btnBig.addEventListener('pointerdown', e => { e.preventDefault(); if (G) G.mod.press(evTime(e)); });
+btnBig.addEventListener('click', e => e.preventDefault());
 document.addEventListener('keydown', e => {
-  if (cur !== 'play' || e.repeat) return;
-  if (e.code === 'Space' || e.code === 'Enter') {
-    if (phase === 'pour') { e.preventDefault(); stop(evTime(e)); }
-    else if (phase === 'count') e.preventDefault();
-  }
+  if (cur !== 'play' || e.repeat || !G) return;
+  if ((e.code === 'Space' || e.code === 'Enter') && !btnBig.hidden) { e.preventDefault(); G.mod.press(evTime(e)); }
 });
 $('play').addEventListener('contextmenu', e => e.preventDefault());
 
@@ -1169,10 +1459,10 @@ function toSetup() {
   show('setup');
 }
 
-// 따르는 중에 화면이 꺼지거나 앱을 벗어나면 그 차례를 다시 한다
+// 진행 중에 화면이 꺼지거나 앱을 벗어나면 그 차례를 다시 한다
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (cur === 'play' && (phase === 'count' || phase === 'pour')) { S.h = 0; toReady(); }
+    if (cur === 'play' && G && ['count', 'pour', 'wait', 'signal'].includes(phase)) { G.mod.abort(); toReady(); }
   } else wake();
 });
 
@@ -1192,14 +1482,15 @@ function miniCup(h, target) {
     + '<rect x="3" y="3" width="34" height="4.6" rx="2.3" fill="var(--cup)" stroke="var(--ink)" stroke-width="1.8"/>'
     + '</svg>';
 }
-function roundRow(r, n, showPts, lastRank) {
+function roundRow(r, showPts, lastRank) {
   const P = G.players[r.p];
-  const cls = 'rk' + (r.rank === 1 ? ' first' : '') + (lastRank && r.rank === lastRank ? ' last' : '');
+  const icon = G.mod.icon ? G.mod.icon(r) : '';
+  const cls = 'rk' + (icon ? '' : ' nocup') + (r.rank === 1 ? ' first' : '') + (lastRank && r.rank === lastRank ? ' last' : '');
   const val = showPts
     ? '<span class="val"><b>+' + r.pts + '</b><small>누적 ' + P.pts + '점</small></span>'
     : '<span class="val"><b>' + r.rank + '등</b></span>';
-  return '<li class="' + cls + '"><span class="pos">' + r.rank + '</span>' + miniCup(r.h, G.round.target)
-    + '<span class="who2"><span class="nm">' + esc(P.name) + '</span><span class="sub' + (r.over ? ' bad' : '') + '">' + errText(r) + '</span></span>'
+  return '<li class="' + cls + '"><span class="pos">' + r.rank + '</span>' + icon
+    + '<span class="who2"><span class="nm">' + esc(P.name) + '</span><span class="sub' + (r.bad ? ' bad' : '') + '">' + esc(r.text) + '</span></span>'
     + val + '</li>';
 }
 function endRound() {
@@ -1211,17 +1502,17 @@ function endRound() {
     const P = G.players[r.p];
     r.pts = n - r.rank + 1;
     P.pts += r.pts;
-    P.overs += r.over ? 1 : 0;
-    P.errSum += Math.abs(r.err);
+    P.bad += r.bad ? 1 : 0;
+    if (r.stat !== null) { P.sum += r.stat; P.cnt++; }
   });
   G.r++;
   if (G.r >= G.rounds) { showFinal(ranked); return; }
 
-  $('res-eyebrow').textContent = G.r + '판 / ' + G.rounds + '판';
+  $('res-eyebrow').textContent = G.mod.title + ' · ' + G.r + '판 / ' + G.rounds + '판';
   $('res-title').textContent = G.r + '판 결과';
   $('res-loser').hidden = true;
   $('res-sub').textContent = '등수만큼 점수를 받습니다. 1등 ' + n + '점, 꼴찌 1점.';
-  $('rank').innerHTML = ranked.map(r => roundRow(r, n, true, 0)).join('');
+  $('rank').innerHTML = ranked.map(r => roundRow(r, true, 0)).join('');
   setActions((G.r + 1) + '판 시작', startRound, null, null, false);
   show('result');
   SFX.close();
@@ -1234,15 +1525,12 @@ function showFinal(ranked) {
     lastRank = Math.max(...ranked.map(r => r.rank));
     losers = ranked.filter(r => r.rank === lastRank).map(r => r.p);
     firsts = ranked.filter(r => r.rank === 1).map(r => r.p);
-    const lr = ranked[ranked.length - 1];
-    why = lr.brim ? '컵이 넘치도록 따랐습니다.'
-      : lr.over ? '선을 ' + (Math.abs(lr.err) < 0.1 ? '0.1' : mm(lr.err)) + 'mm 넘겼습니다.'
-      : '목표선에서 ' + mm(lr.err) + 'mm 모자랐습니다.';
-    rows = ranked.map(r => roundRow(r, n, false, losers.length === n ? 0 : lastRank)).join('');
+    why = G.mod.why(ranked[ranked.length - 1]);
+    rows = ranked.map(r => roundRow(r, false, losers.length === n ? 0 : lastRank)).join('');
   } else {
-    const tot = G.players.map((P, i) => ({ p: i, pts: P.pts, overs: P.overs, errSum: P.errSum }))
-      .sort((a, b) => b.pts - a.pts || a.overs - b.overs || a.errSum - b.errSum);
-    assignRanks(tot, (a, b) => a.pts === b.pts && a.overs === b.overs && Math.abs(a.errSum - b.errSum) < 1e-7);
+    const tot = G.players.map((P, i) => ({ p: i, pts: P.pts, bad: P.bad, avg: P.cnt ? P.sum / P.cnt : Infinity }))
+      .sort((a, b) => b.pts - a.pts || a.bad - b.bad || (a.avg === b.avg ? 0 : a.avg - b.avg));
+    assignRanks(tot, (a, b) => a.pts === b.pts && a.bad === b.bad && (a.avg === b.avg || Math.abs(a.avg - b.avg) < 1e-7));
     lastRank = Math.max(...tot.map(r => r.rank));
     losers = tot.filter(r => r.rank === lastRank).map(r => r.p);
     firsts = tot.filter(r => r.rank === 1).map(r => r.p);
@@ -1251,13 +1539,13 @@ function showFinal(ranked) {
       const P = G.players[r.p];
       const cls = 'rk nocup' + (r.rank === 1 ? ' first' : '') + (r.rank === lastRank && losers.length < n ? ' last' : '');
       return '<li class="' + cls + '"><span class="pos">' + r.rank + '</span>'
-        + '<span class="who2"><span class="nm">' + esc(P.name) + '</span><span class="sub">넘김 ' + r.overs + '회 · 평균 오차 ' + mm(r.errSum / G.rounds) + 'mm</span></span>'
+        + '<span class="who2"><span class="nm">' + esc(P.name) + '</span><span class="sub">' + esc(G.mod.total(P, r.avg)) + '</span></span>'
         + '<span class="val"><b>' + r.pts + '점</b></span></li>';
     }).join('');
   }
   const allTied = losers.length === n;
   const nameOf = p => G.players[p].name;
-  $('res-eyebrow').textContent = multi ? '최종 결과 · ' + G.rounds + '판 합계' : '최종 결과';
+  $('res-eyebrow').textContent = G.mod.title + ' · 최종 결과' + (multi ? ' · ' + G.rounds + '판 합계' : '');
   $('res-loser').hidden = false;
   if (allTied) {
     $('res-title').textContent = '승부를 가리지 못했습니다';
@@ -1270,14 +1558,14 @@ function showFinal(ranked) {
     $('loser-tag').textContent = losers.length > 1 ? '공동 꼴찌' : '꼴찌';
     $('loser-name').textContent = losers.map(nameOf).join(', ');
     $('loser-why').textContent = why;
-    $('res-sub').textContent = multi ? '동점이면 넘긴 횟수가 적은 쪽, 그다음은 평균 오차가 작은 쪽이 위입니다.' : '';
+    $('res-sub').textContent = multi ? G.mod.tieNote : '';
   }
   $('rank').innerHTML = rows;
-  const names = G.players.map(P => P.name), rounds = G.rounds, opts = G.opts;
+  const game = G.game, names = G.players.map(P => P.name), rounds = G.rounds, opts = G.opts;
   const tieNames = losers.map(nameOf);
-  setActions('같은 멤버로 한 판 더', () => newGame(names, rounds, opts),
+  setActions('같은 멤버로 한 판 더', () => newGame(game, names, rounds, opts),
     losers.length > 1 ? '꼴찌 결정전 (' + tieNames.length + '명, 1판)' : null,
-    () => newGame(tieNames, 1, opts), true);
+    () => newGame(game, tieNames, 1, opts), true);
   show('result');
   SFX.fanfare();
 }
@@ -1300,15 +1588,29 @@ $('form').addEventListener('submit', e => {
   SFX.on = cfg.sfx;
   SFX.init();
   const names = Array.from({ length: cfg.n }, (_, i) => (cfg.names[i] || '').trim() || (i + 1) + '번');
-  newGame(names, cfg.rounds, { irr: cfg.irr, blind: cfg.blind });
+  newGame(cfg.game, names, cfg.rounds, { irr: cfg.irr, blind: cfg.blind });
 });
 
-/* ───────── 설정 화면의 시범 장면 ───────── */
+/* ───────── 게임 선택과 시범 장면 ───────── */
+function applyGame() {
+  const mod = MODS[cfg.game];
+  $('game-' + cfg.game).checked = true;
+  $('game-title').textContent = mod.title;
+  $('rules').innerHTML = mod.rules.map(x => '<li>' + esc(x) + '</li>').join('');
+  document.querySelectorAll('.only-pour').forEach(el => { el.hidden = cfg.game !== 'pour'; });
+}
+document.querySelectorAll('input[name="game"]').forEach(r => r.addEventListener('change', () => {
+  if (!r.checked) return;
+  cfg.game = r.value; save(); applyGame();
+}));
+applyGame();
+
+// 따르기 시범: 목표선에 딱 멈추는 모습을 되풀이한다
 const D = mkScene();
 D.target = 0.72;
 let dPh = 0, dClock = 0, dV = 0;
 if (reduceMotion) { D.h = D.target - 0.006; D.steamOn = true; }
-function demoUpdate(dt) {
+function demoPour(dt) {
   if (reduceMotion) return;
   dClock += dt;
   if (dPh === 0) {                                   // 주전자 기울이기
@@ -1323,6 +1625,15 @@ function demoUpdate(dt) {
   } else if (dPh === 3) {                            // 딱 멈춘 모습 보여 주기
     if (dClock > 2.2) { dPh = 4; dClock = 0; D.steamOn = false; D.drain = true; }
   } else if (D.h <= 0) { D.drain = false; dPh = 0; dClock = 0; }
+}
+// 끓이기 시범: 기다리다가 끓어오르는 모습을 되풀이한다
+const BD = mkBoil();
+BD.armed = true; BD.heat = 1;
+let bClock = 0;
+function demoBoil(dt) {
+  if (reduceMotion) return;
+  bClock += dt;
+  BD.on = bClock % 4.2 > 2.6;
 }
 
 /* ───────── 루프 ───────── */
@@ -1340,8 +1651,15 @@ function frame(ts) {
   const t = ts / 1000;
   const dt = clamp(t - lastT, 0, 0.05);
   lastT = t;
-  if (cur === 'setup') { demoUpdate(dt); tickScene(D, dt); paint(heroCv, D, t, dt); }
-  else if (cur === 'play') { gameUpdate(); tickScene(S, dt); paint(cv, S, t, dt); }
+  if (cur === 'setup') {
+    if (cfg.game === 'pour') { demoPour(dt); tickScene(D, dt); paint(heroCv, drawPour, D, t, dt); }
+    else { demoBoil(dt); tickBoil(BD, dt); paint(heroCv, drawBoil, BD, t, dt); }
+  } else if (cur === 'play' && G) {
+    const mod = G.mod;
+    mod.update(performance.now());
+    mod.tick(mod.scene, dt);
+    paint(cv, mod.draw, mod.scene, t, dt);
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
